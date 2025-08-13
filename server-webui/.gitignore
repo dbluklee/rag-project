@@ -1,0 +1,6 @@
+# Open WebUI 사용자 데이터 (중요한 개인정보 포함)
+data/
+
+# 로그
+*.log
+logs/

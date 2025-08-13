@@ -1,0 +1,13 @@
+# 모델 파일들 (수십 GB 크기)
+models/
+*.bin
+*.safetensors
+*.gguf
+*.ggml
+
+# 로그
+*.log
+logs/
+
+# 임시 다운로드
+tmp/

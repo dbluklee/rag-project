@@ -1,0 +1,10 @@
+# 벡터 데이터베이스 볼륨 (크기가 매우 큼)
+volumes/
+
+# 로그
+*.log
+logs/
+
+# 백업 데이터
+backup/*.tar.gz
+backup/*.backup

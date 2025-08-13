@@ -1,0 +1,45 @@
+services:
+  rag-server:
+    build: .
+    container_name: cheeseade-rag-server
+    env_file:
+      - ../env.global
+      - .env
+    ports:
+      - "${RAG_PORT:-8000}:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+      
+      # 외부 서버 연결
+      - MILVUS_HOST=${MILVUS_SERVER_IP}
+      - MILVUS_PORT=${MILVUS_PORT}
+ 
+      
+    volumes:
+      - ./docs:/app/docs
+      - ./logs:/app/logs
+
+    restart: unless-stopped
+
+    depends_on:
+      - rag-init
+      - milvus
+      - ollama
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # 의존성 확인 서비스
+  rag-init:
+    image: curlimages/curl:latest
+    container_name: cheeseade-rag-init
+    volumes:
+      - ./startup.sh:/startup.sh
+    entrypoint: ["/bin/sh", "/startup.sh"]
+    environment:
+      - MILVUS_HOST=${MILVUS_SERVER_IP}
+      - MILVUS_PORT=${MILVUS_PORT}
+    restart: "no"

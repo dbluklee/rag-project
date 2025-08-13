@@ -1,0 +1,34 @@
+services:
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    env_file:
+      - ../env.global
+      - .env
+    container_name: cheeseade-webui
+    ports:
+      - '${WEBUI_PORT:-3000}:8080'
+    environment:
+      # 멀티 커넥션 설정
+      - 'ENABLE_OLLAMA_API=true'
+      - 'OLLAMA_BASE_URLS=${RAG_SERVER_URL};${LLM_SERVER_URL}'
+      
+      # 기본 설정
+      - 'WEBUI_AUTH=false'
+      - 'ENABLE_LOGIN_FORM=false'
+      - 'DEFAULT_MODELS=${RAG_MODEL_NAME},${LLM_MODEL_NAME}'
+      - 'ENABLE_API_KEY=false'
+      
+    volumes:
+      - ./data:/app/backend/data
+      - ./config:/app/backend/config
+    
+    restart: unless-stopped
+
+    depends_on:
+      - rag-server
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

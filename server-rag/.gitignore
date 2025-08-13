@@ -1,0 +1,19 @@
+# 실제 사용 문서 (보안 민감 정보 포함)
+docs/*
+
+# 단, logs 폴더 안의 .gitkeep 파일은 무시하지 않음
+# 폴더는 그대로 유지하기 위해서
+!docs/.gitkeep
+
+# 로그 파일
+logs/
+*.log
+
+# Python 캐시
+__pycache__/
+*.pyc
+*.pyo
+
+# 임시 파일
+tmp/
+temp/

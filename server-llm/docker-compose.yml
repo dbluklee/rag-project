@@ -1,0 +1,35 @@
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: llm-server
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    ports:
+      - "${LLM_PORT:-11434}:11434"
+    volumes:
+      - ./models:/root/.ollama
+      - ./logs:/var/log/ollama
+    environment:
+      - OLLAMA_KEEP_ALIVE=24h
+      - OLLAMA_HOST=0.0.0.0
+      - OLLAMA_ORIGINS=*
+      - NVIDIA_VISIBLE_DEVICES=all
+    restart: unless-stopped
+
+  ollama-init:
+    image: curlimages/curl:latest
+    container_name: ollama-init
+    depends_on:
+      ollama:
+        condition: service_healthy
+    volumes:
+      - ./ollama-init.sh:/ollama-init.sh
+    entrypoint: ["/bin/sh", "/ollama-init.sh"]
+    environment:
+      - MODEL_NAME=${LLM_MODEL_NAME:-gemma3:27b-it-q4_K_M}
+    restart: "no"
