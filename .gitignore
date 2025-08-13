@@ -1,6 +1,6 @@
 # 로그 파일
 *.log
-logs/
+logs*
 
 # 백업 파일
 *.backup
