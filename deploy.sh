@@ -183,34 +183,73 @@ check_rag_health() {
         fi
         
         # 2. 포트 확인
-        if ! netstat -tuln 2>/dev/null | grep -q ":1886 " && ! ss -tuln 2>/dev/null | grep -q ":1886 "; then
-            echo -e "${YELLOW}포트 1886 대기 중...${NC}"
+        if ! netstat -tuln 2>/dev/null | grep -q ":${RAG_PORT} " && ! ss -tuln 2>/dev/null | grep -q ":${RAG_PORT} "; then
+            echo -e "${YELLOW}포트 ${RAG_PORT} 대기 중...${NC}"
             sleep 5
             attempt=$((attempt + 1))
             continue
         fi
         
-        # 3. 기본 HTTP 응답 확인
-        http_response=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 3 "${RAG_SERVER_URL}/health" 2>/dev/null)
-        if [ "$http_response" = "200" ]; then
-            echo -e "${GREEN}✅ RAG 서버 준비 완료! (HTTP 200)${NC}"
-            return 0
-        elif [ "$http_response" = "404" ]; then
-            # /health 엔드포인트가 없을 수 있음, 다른 엔드포인트 시도
-            api_response=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 3 "${RAG_SERVER_URL}/api/tags" 2>/dev/null)
-            if [ "$api_response" = "200" ]; then
-                echo -e "${GREEN}✅ RAG 서버 준비 완료! (API 응답)${NC}"
-                return 0
+        # 3. 헬스체크 엔드포인트 확인 (우선순위 1)
+        health_response=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 3 "${RAG_SERVER_URL}/health" 2>/dev/null)
+        if [ "$health_response" = "200" ]; then
+            echo -e "${GREEN}✅ RAG 서버 준비 완료! (헬스체크 통과)${NC}"
+            
+            # 추가 정보 수집
+            system_info=$(curl -s --connect-timeout 3 "${RAG_SERVER_URL}/" 2>/dev/null)
+            if echo "$system_info" | grep -q "CHEESEADE RAG Server"; then
+                echo -e "   📊 시스템 정보 확인됨"
+                
+                # 로드된 문서 수 확인
+                docs_count=$(echo "$system_info" | grep -o '"documents_loaded":[0-9]*' | cut -d':' -f2)
+                if [ -n "$docs_count" ] && [ "$docs_count" -gt 0 ]; then
+                    echo -e "   📄 로드된 문서: ${docs_count}개"
+                fi
+                
+                # 임베딩 디바이스 확인
+                device=$(echo "$system_info" | grep -o '"embedding_device":"[^"]*"' | cut -d'"' -f4)
+                if [ -n "$device" ]; then
+                    echo -e "   🖥️ 임베딩 디바이스: ${device}"
+                fi
             fi
+            return 0
         fi
         
-        # 4. 로그 기반 진행 상황 확인
+        # 4. 모델 API 확인 (우선순위 2)
+        models_response=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 3 "${RAG_SERVER_URL}/api/models" 2>/dev/null)
+        if [ "$models_response" = "200" ]; then
+            echo -e "${GREEN}✅ RAG 서버 준비 완료! (모델 API 응답)${NC}"
+            
+            # 사용 가능한 모델 확인
+            models_data=$(curl -s --connect-timeout 3 "${RAG_SERVER_URL}/api/models" 2>/dev/null)
+            if echo "$models_data" | grep -q "$RAG_MODEL_NAME"; then
+                echo -e "   🤖 RAG 모델 확인됨: ${RAG_MODEL_NAME}"
+            fi
+            return 0
+        fi
+        
+        # 5. Ollama 스타일 태그 API 확인 (우선순위 3)
+        tags_response=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 3 "${RAG_SERVER_URL}/api/tags" 2>/dev/null)
+        if [ "$tags_response" = "200" ]; then
+            echo -e "${GREEN}✅ RAG 서버 준비 완료! (태그 API 응답)${NC}"
+            return 0
+        fi
+        
+        # 6. 기본 루트 엔드포인트 확인 (우선순위 4)
+        root_response=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 3 "${RAG_SERVER_URL}/" 2>/dev/null)
+        if [ "$root_response" = "200" ]; then
+            echo -e "${GREEN}✅ RAG 서버 기본 응답 확인! (루트 엔드포인트)${NC}"
+            return 0
+        fi
+        
+        # 7. 로그 기반 진행 상황 확인
         if [ $((attempt % 5)) -eq 0 ]; then
             rag_logs=$(docker logs --tail 30 cheeseade-rag-server 2>/dev/null || echo "")
             
             if echo "$rag_logs" | grep -q -i "error\|failed\|exception"; then
                 echo -e "${RED}오류 감지됨${NC}"
-                echo -e "      🔍 로그 확인: docker logs cheeseade-rag-server"
+                echo -e "      🔍 최근 오류 로그:"
+                echo "$rag_logs" | grep -i -E "error|failed|exception" | tail -3 | sed 's/^/        /'
             elif echo "$rag_logs" | grep -q -i "자동.*다운로드\|downloading\|snapshot_download"; then
                 echo -e "${CYAN}자동 모델 다운로드 중...${NC}"
             elif echo "$rag_logs" | grep -q -i "loading\|embedding.*model\|임베딩.*모델"; then
@@ -219,6 +258,10 @@ check_rag_health() {
                 echo -e "${CYAN}벡터 DB 연결 중...${NC}"
             elif echo "$rag_logs" | grep -q -i "fastapi\|uvicorn\|server.*start"; then
                 echo -e "${CYAN}웹 서버 시작 중...${NC}"
+            elif echo "$rag_logs" | grep -q -i "rag.*체인\|chat.*handler"; then
+                echo -e "${CYAN}RAG 체인 구성 중...${NC}"
+            elif echo "$rag_logs" | grep -q -i "chunking\|청킹"; then
+                echo -e "${CYAN}문서 청킹 중...${NC}"
             else
                 echo -e "${YELLOW}RAG 서버 초기화 대기 중...${NC}"
             fi
@@ -240,6 +283,11 @@ check_rag_health() {
     done
     
     echo -e "${RED}❌ RAG 서버 헬스체크 실패 (타임아웃)${NC}"
+    echo -e "   🔍 문제 진단:"
+    echo -e "     1. 컨테이너 로그 확인: docker logs cheeseade-rag-server"
+    echo -e "     2. 포트 확인: netstat -tuln | grep ${RAG_PORT}"
+    echo -e "     3. 수동 헬스체크: curl ${RAG_SERVER_URL}/health"
+    echo -e "     4. 시스템 리소스: free -h && df -h"
     return 1
 }
 

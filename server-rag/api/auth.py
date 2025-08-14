@@ -10,8 +10,8 @@ class AuthService:
     
     def __init__(self):
         # 환경변수에서 인증 설정 가져오기
-        self.auth_enabled = os.getenv('WEBUI_AUTH', 'true').lower() == 'true'
-        self.api_key_enabled = os.getenv('ENABLE_API_KEY', 'true').lower() == 'true'
+        self.auth_enabled = os.getenv('WEBUI_AUTH', 'false').lower() == 'true'
+        self.api_key_enabled = os.getenv('ENABLE_API_KEY', 'false').lower() == 'true'
         
         # 개발용 고정 API 키 (실제로는 DB에서 관리)
         self.valid_api_keys = {
@@ -46,6 +46,14 @@ class AuthService:
         
         # Authorization 헤더 확인
         if not authorization:
+            # 인증이 선택사항인 경우 None 반환 허용
+            if not self.auth_enabled:
+                return {
+                    "user_id": "anonymous",
+                    "name": "Anonymous User", 
+                    "permissions": ["read"]
+                }
+            
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail={
@@ -78,6 +86,15 @@ class AuthService:
         # API 키 검증
         user_info = self.valid_api_keys.get(api_key)
         if not user_info:
+            # 개발 모드에서는 경고만 출력하고 통과
+            if not self.auth_enabled:
+                print(f"⚠️ 유효하지 않은 API 키이지만 개발 모드로 통과: {api_key[:10]}...")
+                return {
+                    "user_id": "dev-user",
+                    "name": "Development User",
+                    "permissions": ["read", "write"]
+                }
+            
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail={
@@ -128,4 +145,5 @@ async def get_current_user_optional(authorization: Optional[str] = Header(None))
     try:
         return auth_service.verify_api_key(authorization)
     except HTTPException:
+        # 인증 실패시 None 반환 (선택적 인증)
         return None

@@ -1,149 +1,252 @@
 """
-OpenWebUI API 서비스 로직
+OpenWebUI/Ollama 호환 API 라우터
 """
-import os
-from typing import List, Optional
-from .models import WebUIModelInfo, create_webui_model_info
+import uuid
+import time
+from typing import Optional
+from fastapi import APIRouter, HTTPException, Header, Depends, status, Response
+from fastapi.responses import StreamingResponse
 
-class ModelService:
-    """모델 관련 서비스 (OpenWebUI 전용)"""
-    
-    def __init__(self):
-        # 환경변수에서 모델 정보 가져오기
-        self.rag_model_name = os.environ["RAG_MODEL_NAME"]
-        self.llm_model_name = os.environ["LLM_MODEL_NAME"]
-        
-        print(f"🔧 ModelService 초기화")
-        print(f"   RAG 모델: {self.rag_model_name}")
-        print(f"   LLM 모델: {self.llm_model_name}")
-    
-    def get_openwebui_models(self) -> List[WebUIModelInfo]:
-        """OpenWebUI 형식 모델 목록"""
-        models = []
-        
-        # RAG 모델
-        rag_model = create_webui_model_info(
-            model_name=self.rag_model_name,
-            size=2500000000,  # 2.5GB
-            description"""
-모델 관련 비즈니스 로직
-"""
-from typing import List, Optional
-from ..models.openai import ModelInfo, create_model_info
-from ..models.openwebui import WebUIModelInfo, create_webui_model_info
+from .models import (
+    ModelsResponse, WebUIModelsResponse, 
+    ChatRequest, ChatResponse, ChatResponseChoice, ChatResponseMessage,
+    RetrievalTestRequest, RetrievalTestResponse
+)
+from .services import model_service
+from .auth import get_current_user_optional
 
-class ModelService:
-    """모델 관련 서비스"""
-    
-    def __init__(self):
-        # 실제 환경에서는 DB, 외부 API, 설정 파일 등에서 가져옴
-        self._models_config = [
-            {
-                "id": "rag-cheeseade:latest",
-                "name": "rag-cheeseade:latest",
-                "owned_by": "CHEESEADE",
-                "description": "CHEESEADE RAG를 활용한 전문 상담",
-                "family": "rag-enhanced",
-                "parameter_size": "RAG + 27B",
-                "size": 2500000000  # 2.5GB
-            },
-            {
-                "id": "gemma3:27b-it-q4_K_M",
-                "name": "gemma3:27b-it-q4_K_M",
-                "owned_by": "CHEESEADE",
-                "description": "일반용 대화형 AI 모델",
-                "family": "gemma3",
-                "parameter_size": "27B",
-                "size": 15000000000  # 15GB
-            }
-        ]
-    
-    def get_available_models(self) -> List[dict]:
-        """사용 가능한 모델 설정 반환"""
-        return self._models_config.copy()
-    
-    def get_model_by_id(self, model_id: str) -> Optional[dict]:
-        """ID로 모델 찾기"""
-        return next(
-            (model for model in self._models_config if model["id"] == model_id),
-            None
-        )
-    
-    def get_openai_models(self) -> List[ModelInfo]:
-        """OpenAI 형식 모델 목록"""
-        models = []
-        for config in self._models_config:
-            model = create_model_info(
-                model_id=config["id"],
-                owned_by=config["owned_by"],
-                root=config["id"]
-            )
-            models.append(model)
-        return models
-    
-    def get_openai_model_by_id(self, model_id: str) -> Optional[ModelInfo]:
-        """OpenAI 형식 특정 모델"""
-        config = self.get_model_by_id(model_id)
-        if not config:
-            return None
-        
-        return create_model_info(
-            model_id=config["id"],
-            owned_by=config["owned_by"],
-            root=config["id"]
-        )
-    
-    def get_openwebui_models(self) -> List[WebUIModelInfo]:
-        """OpenWebUI 형식 모델 목록"""
-        models = []
-        for config in self._models_config:
-            model = create_webui_model_info(
-                model_name=config["name"],
-                size=config["size"],
-                description=config["description"],
-                family=config["family"],
-                parameter_size=config["parameter_size"]
-            )
-            models.append(model)
-        return models
-    
-    def get_openwebui_model_by_name(self, model_name: str) -> Optional[WebUIModelInfo]:
-        """OpenWebUI 형식 특정 모델"""
-        config = next(
-            (model for model in self._models_config if model["name"] == model_name),
-            None
-        )
-        if not config:
-            return None
-        
-        return create_webui_model_info(
-            model_name=config["name"],
-            size=config["size"],
-            description=config["description"],
-            family=config["family"],
-            parameter_size=config["parameter_size"]
-        )
-    
-    def is_model_available(self, model_id: str) -> bool:
-        """모델 사용 가능 여부 확인"""
-        return self.get_model_by_id(model_id) is not None
-    
-    def add_model(self, model_config: dict) -> bool:
-        """새 모델 추가 (동적 모델 관리용)"""
-        if self.get_model_by_id(model_config["id"]):
-            return False  # 이미 존재
-        
-        self._models_config.append(model_config)
-        return True
-    
-    def remove_model(self, model_id: str) -> bool:
-        """모델 제거"""
-        original_count = len(self._models_config)
-        self._models_config = [
-            model for model in self._models_config 
-            if model["id"] != model_id
-        ]
-        return len(self._models_config) < original_count
+# 라우터 생성
+router = APIRouter()
 
-# 전역 모델 서비스 인스턴스
-model_service = ModelService()
+# 전역 채팅 핸들러 (server.py에서 설정)
+chat_handler = None
+
+def set_chat_handler(handler):
+    """채팅 핸들러 설정 (server.py에서 호출)"""
+    global chat_handler
+    chat_handler = handler
+    print(f"✅ 채팅 핸들러 설정 완료")
+
+# ================================
+# OpenAI 호환 엔드포인트
+# ================================
+
+@router.get("/api/models", response_model=ModelsResponse)
+async def list_openai_models(
+    current_user: Optional[dict] = Depends(get_current_user_optional)
+):
+    """OpenAI 형식 모델 목록"""
+    print(f"📋 GET /api/models 요청")
+    if current_user:
+        print(f"   사용자: {current_user.get('name', 'Unknown')}")
+    
+    models = model_service.get_openai_models()
+    print(f"   반환된 모델 수: {len(models)}")
+    
+    return ModelsResponse(
+        object="list",
+        data=models
+    )
+
+# ================================
+# OpenWebUI/Ollama 호환 엔드포인트
+# ================================
+
+@router.get("/api/tags", response_model=WebUIModelsResponse)
+async def list_webui_models(
+    current_user: Optional[dict] = Depends(get_current_user_optional)
+):
+    """Ollama/OpenWebUI 형식 모델 목록"""
+    print(f"📋 GET /api/tags 요청")
+    if current_user:
+        print(f"   사용자: {current_user.get('name', 'Unknown')}")
+    
+    models = model_service.get_openwebui_models()
+    print(f"   반환된 모델 수: {len(models)}")
+    
+    return WebUIModelsResponse(models=models)
+
+@router.get("/api/show")
+async def show_model(
+    name: str,
+    current_user: Optional[dict] = Depends(get_current_user_optional)
+):
+    """특정 모델 정보 (Ollama 호환)"""
+    print(f"📋 GET /api/show?name={name} 요청")
+    if current_user:
+        print(f"   사용자: {current_user.get('name', 'Unknown')}")
+    
+    model = model_service.get_openwebui_model_by_name(name)
+    if not model:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Model '{name}' not found"
+        )
+    
+    print(f"   모델 발견: {model.name}")
+    return model
+
+# ================================
+# 시스템 정보 엔드포인트
+# ================================
+
+@router.get("/api/version")
+async def get_version():
+    """API 버전 정보 (인증 불필요)"""
+    print(f"📋 GET /api/version 요청")
+    return {
+        "version": "1.0.0",
+        "api_version": "1.0",
+        "service": "CHEESEADE RAG Server",
+        "compatible": ["OpenAI", "Ollama", "OpenWebUI"]
+    }
+
+@router.get("/health")
+async def health_check(response: Response):
+    """서버 상태 확인 (인증 불필요)"""
+    print(f"📋 GET /health 요청")
+    response.status_code = status.HTTP_200_OK
+    return {
+        "status": "healthy",
+        "service": "rag-server",
+        "timestamp": int(time.time()),
+        "models_available": len(model_service.get_available_models())
+    }
+
+# ================================
+# 채팅 완료 엔드포인트 (메인 기능)
+# ================================
+
+@router.post("/api/chat/completions", response_model=ChatResponse)
+async def chat_completions(
+    request: ChatRequest,
+    authorization: Optional[str] = Header(None)
+):
+    """OpenAI 호환 채팅 완료 API"""
+    if not chat_handler:
+        raise HTTPException(
+            status_code=503,
+            detail="Chat handler not initialized"
+        )
+    
+    try:
+        if authorization:
+            print(f"🔑 인증: {authorization[:20]}...")
+        
+        print(f"\n🎯 POST /api/chat/completions")
+        print(f"   모델: {request.model}")
+        print(f"   스트림: {request.stream}")
+        
+        # 가장 최근 사용자 메시지 가져오기
+        user_question = request.messages[-1].content
+        print(f"   질문: {user_question}")
+        
+        # 모델이 RAG 모델인지 확인
+        if request.model == chat_handler.rag_model_name:
+            # RAG 사용
+            if request.stream:
+                return StreamingResponse(
+                    chat_handler.stream_rag_response(user_question, request.model),
+                    media_type="text/plain",
+                    headers={
+                        "Cache-Control": "no-cache",
+                        "Connection": "keep-alive",
+                    }
+                )
+            else:
+                response_dict = await chat_handler.handle_chat_request(request)
+                return ChatResponse(**response_dict)
+        else:
+            # 일반 LLM 사용 (Ollama로 프록시)
+            if request.stream:
+                return StreamingResponse(
+                    chat_handler.proxy_stream_to_llm(request),
+                    media_type="text/plain",
+                    headers={
+                        "Cache-Control": "no-cache",
+                        "Connection": "keep-alive",
+                    }
+                )
+            else:
+                response_dict = await chat_handler.proxy_to_llm(request)
+                return response_dict
+        
+    except Exception as e:
+        print(f"❌ API 오류: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/api/chat")
+async def chat_simple(request: dict):
+    """간단한 채팅 엔드포인트 (호환성용)"""
+    print(f"🎯 POST /api/chat (간단한 형식)")
+    
+    if not chat_handler:
+        raise HTTPException(
+            status_code=503,
+            detail="Chat handler not initialized"
+        )
+    
+    # 간단한 형식을 표준 형식으로 변환
+    if "message" in request:
+        # {"message": "질문"} 형식
+        question = request["message"]
+        model = request.get("model", chat_handler.rag_model_name)
+        
+        chat_request = ChatRequest(
+            model=model,
+            messages=[{"role": "user", "content": question}],
+            stream=request.get("stream", False)
+        )
+        
+        return await chat_completions(chat_request)
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid request format. Expected 'message' field."
+        )
+
+# ================================
+# 디버그/테스트 엔드포인트
+# ================================
+
+@router.post("/debug/test-retrieval", response_model=RetrievalTestResponse)
+async def test_retrieval(request: RetrievalTestRequest):
+    """검색 기능 테스트"""
+    if not chat_handler:
+        raise HTTPException(
+            status_code=503,
+            detail="Chat handler not initialized"
+        )
+    
+    print(f"🧪 POST /debug/test-retrieval 요청: {request.question}")
+    
+    try:
+        result = chat_handler.test_retrieval(request.question)
+        return RetrievalTestResponse(**result)
+        
+    except Exception as e:
+        print(f"❌ 검색 테스트 오류: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"검색 테스트 실패: {str(e)}"
+        )
+
+# ================================
+# 루트 엔드포인트
+# ================================
+
+@router.get("/")
+async def root():
+    """루트 엔드포인트"""
+    return {
+        "message": "CHEESEADE RAG Server",
+        "version": "1.0.0",
+        "status": "running",
+        "endpoints": {
+            "models": "/api/models",
+            "tags": "/api/tags", 
+            "show": "/api/show?name=<model>",
+            "version": "/api/version",
+            "health": "/health"
+        }
+    }
