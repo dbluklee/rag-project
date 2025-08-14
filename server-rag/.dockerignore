@@ -4,6 +4,7 @@
 docs/                    # 볼륨으로 마운트됨 (./docs:/app/docs:ro)
 logs/                    # 볼륨으로 마운트됨 (./logs:/app/logs)
 
+
 # === Git 관련 ===
 .git/
 .gitignore

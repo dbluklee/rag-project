@@ -57,8 +57,13 @@ RUN pip install --no-cache-dir -r requirements.txt
 # 애플리케이션 스테이지
 FROM pytorch AS app
 
-# 사용자 생성
-RUN groupadd -r appuser && useradd -r -g appuser appuser
+# 사용자 생성 및 홈 디렉토리 권한 설정
+RUN groupadd -r appuser && useradd -r -g appuser -m -d /home/appuser appuser
+
+# HuggingFace 캐시 디렉토리 미리 생성 및 권한 설정
+RUN mkdir -p /home/appuser/.cache/huggingface \
+    && chown -R appuser:appuser /home/appuser \
+    && chmod -R 755 /home/appuser
 
 # 애플리케이션 복사
 COPY --chown=appuser:appuser . .

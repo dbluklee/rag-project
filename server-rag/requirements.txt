@@ -22,6 +22,8 @@ pymilvus                          # Milvus Python SDK
 # === 임베딩 및 ML (PyTorch 제외) ===
 transformers                      # Transformer 모델
 sentence-transformers            # 문장 임베딩
+huggingface_hub
+transformers
 
 # === 기본 유틸리티 ===
 numpy                            # 수치 계산 (의존성)

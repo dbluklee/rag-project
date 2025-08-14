@@ -1,5 +1,6 @@
 # 실제 사용 문서 (보안 민감 정보 포함)
 docs/
+embedding/models/
 
 # 로그 파일
 logs/
