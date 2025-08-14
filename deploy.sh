@@ -10,13 +10,19 @@ else
     exit 1
 fi
 
+export WEBUI_SERVER_URL="http://${WEBUI_SERVER_IP}:${WEBUI_PORT}"
+export RAG_SERVER_URL="http://${RAG_SERVER_IP}:${RAG_PORT}"
+export MILVUS_SERVER_URL="http://${MILVUS_SERVER_IP}:${MILVUS_PORT}"
+export LLM_SERVER_URL="http://${LLM_SERVER_IP}:${LLM_PORT}"
+
+
 echo "📁 필요한 디렉토리 생성..."
 
 # 각 서버별 데이터 디렉토리 생성 (로그 등)
-mkdir -p server-webui/data
+# mkdir -p server-webui/data
 mkdir -p server-rag/logs  
-mkdir -p server-milvus/volumes/{milvus,etcd,minio}
-mkdir -p server-llm/models
+# mkdir -p server-milvus/volumes/{milvus,etcd,minio}
+# mkdir -p server-llm/models
 mkdir -p server-llm/logs
 
 
@@ -57,8 +63,9 @@ echo "✅ 모든 서버 시작 완료!"
 echo ""
 echo "📊 다음 단계:"
 echo "   1. 상태 확인: ./health-check.sh"
-echo "   2. 브라우저에서 접속: http://${WEBUI_SERVER_IP:-localhost}:${WEBUI_PORT:-3000}"
+echo "   2. 브라우저에서 접속: http://${WEBUI_SERVER_IP}:${WEBUI_PORT}"
 echo "   3. 모델 선택:"
 echo "      - rag-cheeseade:latest (CHEESEADE RAG를 활용한 전문 상담)"
 echo "      - gemma3:27b-it-q4_K_M (일반 대화)"
 echo ""
+

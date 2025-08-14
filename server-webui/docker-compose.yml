@@ -2,7 +2,7 @@ services:
   open-webui:
     image: ghcr.io/open-webui/open-webui:main
     env_file:
-      - ../env.global
+      - ../.env.global
       - .env
     container_name: cheeseade-webui
     ports:

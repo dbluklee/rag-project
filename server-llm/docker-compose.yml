@@ -1,6 +1,9 @@
 services:
   ollama:
     image: ollama/ollama:latest
+    env_file:
+      - ../.env.global
+      - .env
     container_name: llm-server
     deploy:
       resources:
@@ -10,26 +13,38 @@ services:
               count: all
               capabilities: [gpu]
     ports:
-      - "${LLM_PORT:-11434}:11434"
+      - "11434:11434"
     volumes:
-      - ./models:/root/.ollama
+      - ./ollama:/root/.ollama
       - ./logs:/var/log/ollama
     environment:
       - OLLAMA_KEEP_ALIVE=24h
-      - OLLAMA_HOST=0.0.0.0
-      - OLLAMA_ORIGINS=*
+      - OLLAMA_HOST=0.0.0.0:11434
       - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+
     restart: unless-stopped
 
   ollama-init:
     image: curlimages/curl:latest
     container_name: ollama-init
+    env_file:
+      - ../.env.global
+      - .env
     depends_on:
-      ollama:
-        condition: service_healthy
+      - ollama
     volumes:
       - ./ollama-init.sh:/ollama-init.sh
     entrypoint: ["/bin/sh", "/ollama-init.sh"]
     environment:
-      - MODEL_NAME=${LLM_MODEL_NAME:-gemma3:27b-it-q4_K_M}
+      - CONNECTION_TIMEOUT=300
+      - LLM_SERVER_URL=http://${LLM_SERVER_IP}:${LLM_PORT}
+      - MAX_RETRY=3
+      - RETRY_DELAY=30
+    healthcheck:
+      test: ["CMD", "/bin/sh", "/check-model.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 300s
     restart: "no"

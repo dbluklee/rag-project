@@ -9,6 +9,12 @@ services:
     volumes:
       - ./volumes/etcd:/etcd
     command: etcd -advertise-client-urls=http://127.0.0.1:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
     networks:
       - milvus-net
 
@@ -24,6 +30,12 @@ services:
     volumes:
       - ./volumes/minio:/minio_data
     command: minio server /minio_data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
     networks:
       - milvus-net
 
@@ -37,14 +49,23 @@ services:
     volumes:
       - ./volumes/milvus:/var/lib/milvus
     ports:
-      - "${MILVUS_PORT:-19530}:19530"
+      - "19530:19530"
       - "9091:9091"
     depends_on:
-      - etcd
-      - minio
+      etcd:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
     networks:
       - milvus-net
 
 networks:
   milvus-net:
     driver: bridge
+

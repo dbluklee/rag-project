@@ -471,3 +471,4 @@ echo "📊 상태 확인:"
 echo "   ./health-check.sh"
 echo ""
 echo -e "${GREEN}✅ Samsung RAG 시스템 중지 완료${NC}"
+

@@ -3,29 +3,19 @@ services:
     build: .
     container_name: cheeseade-rag-server
     env_file:
-      - ../env.global
+      - ../.env.global
       - .env
     ports:
-      - "${RAG_PORT:-8000}:8000"
+      - "8000:8000"
     environment:
-      - PYTHONUNBUFFERED=1
-      
-      # 외부 서버 연결
-      - MILVUS_HOST=${MILVUS_SERVER_IP}
-      - MILVUS_PORT=${MILVUS_PORT}
- 
-      
+      - PYTHONUNBUFFERED=1   
     volumes:
-      - ./docs:/app/docs
+      - ./docs:/app/docs:ro
       - ./logs:/app/logs
-
     restart: unless-stopped
-
     depends_on:
       - rag-init
-      - milvus
-      - ollama
-    
+
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -38,8 +28,15 @@ services:
     container_name: cheeseade-rag-init
     volumes:
       - ./startup.sh:/startup.sh
+    depends_on:
+      ollama-init:
+        condition: service_healthy
+      milvus:
+        condition: service_healthy
     entrypoint: ["/bin/sh", "/startup.sh"]
     environment:
-      - MILVUS_HOST=${MILVUS_SERVER_IP}
-      - MILVUS_PORT=${MILVUS_PORT}
+      - PYTHONUNBUFFERED=1
+      - PYTHONPATH=/app
+      - LLM_SERVER_URL=http://${LLM_SERVER_IP}:${LLM_PORT}
+      - API_TIMEOUT=120
     restart: "no"

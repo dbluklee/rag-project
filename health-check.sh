@@ -260,3 +260,4 @@ echo "   ./monitoring/logs-collect.sh"
 echo ""
 
 exit $OVERALL_STATUS
+
