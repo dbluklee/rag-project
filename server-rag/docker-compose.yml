@@ -1,6 +1,10 @@
 services:
   rag-server:
-    build: .
+    build: 
+      context: .
+      args:
+        USE_CUDA: ${USE_CUDA:-true}  # ../.env에서 설정 가능
+        CUDA_VERSION: ${CUDA_VERSION:-cu121}
     container_name: cheeseade-rag-server
     env_file:
       - ../.env.global
@@ -9,13 +13,24 @@ services:
       - "8000:8000"
     environment:
       - PYTHONUNBUFFERED=1   
+      - PYTHONPATH=/app
+      - PYTHONDONTWRITEBYTECODE=1
+      - DEBIAN_FRONTEND=noninteractive
+      - CUDA_VISIBLE_DEVICES=${USE_CUDA:+${CUDA_VISIBLE_DEVICES:-0}}
     volumes:
       - ./docs:/app/docs:ro
       - ./logs:/app/logs
     restart: unless-stopped
     depends_on:
       - rag-init
-
+    # GPU 사용시에만 GPU 리소스 할당
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: ${USE_CUDA:+all}  # USE_CUDA=true일 때만
+              capabilities: [gpu]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -28,11 +43,6 @@ services:
     container_name: cheeseade-rag-init
     volumes:
       - ./startup.sh:/startup.sh
-    depends_on:
-      ollama-init:
-        condition: service_healthy
-      milvus:
-        condition: service_healthy
     entrypoint: ["/bin/sh", "/startup.sh"]
     environment:
       - PYTHONUNBUFFERED=1

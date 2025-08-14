@@ -42,13 +42,6 @@ for i in {1..10}; do
     sleep 5
 done
 
-# 문서 파일 확인 (옵션)
-doc_count=$(find /app/docs -type f 2>/dev/null | wc -l)
-if [ "$doc_count" -eq 0 ]; then
-    echo "⚠️ docs 디렉토리가 비어있습니다"
-else
-    echo "✅ $doc_count 개의 문서 파일 발견"
-fi
 
 # 서버 시작
 echo ""

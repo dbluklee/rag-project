@@ -1,4 +1,4 @@
-# Samsung RAG Server Requirements
+# Samsung RAG Server Requirements (PyTorch 제외)
 # Python 3.11+ 지원, 최적화된 버전 고정
 
 # === 웹 프레임워크 ===
@@ -20,19 +20,7 @@ langchain-ollama==0.0.1             # Ollama LLM 통합
 pymilvus==2.3.4                     # Milvus Python SDK
 milvus==2.3.4                       # Milvus 클라이언트
 
-# === 임베딩 및 ML ===
-# PyTorch (CPU 버전 - GPU 필요시 주석 해제)
-torch==2.1.2+cpu                    # PyTorch CPU
-torchvision==0.16.2+cpu             # 컴퓨터 비전
-torchaudio==2.1.2+cpu               # 오디오 처리
---extra-index-url https://download.pytorch.org/whl/cpu
-
-# GPU 버전 (필요시 주석 해제하고 위의 CPU 버전 주석 처리)
-# torch==2.1.2+cu121
-# torchvision==0.16.2+cu121  
-# torchaudio==2.1.2+cu121
-# --extra-index-url https://download.pytorch.org/whl/cu121
-
+# === 임베딩 및 ML (PyTorch 제외) ===
 # HuggingFace 생태계
 transformers==4.36.2                # Transformer 모델
 sentence-transformers==2.2.2        # 문장 임베딩
@@ -83,13 +71,6 @@ python-jose[cryptography]==3.3.0    # JWT 토큰
 pyyaml==6.0.1                       # YAML 파싱
 toml==0.10.2                        # TOML 파싱
 python-magic==0.4.27                # 파일 타입 감지
-
-# === 개발 도구 (선택사항) ===
-# pytest==7.4.3                     # 테스트 프레임워크
-# pytest-asyncio==0.21.1            # 비동기 테스트
-# black==23.11.0                    # 코드 포매터
-# flake8==6.1.0                     # 린터
-# mypy==1.7.1                       # 타입 체커
 
 # === 성능 최적화 ===
 uvloop==0.19.0                      # 빠른 이벤트 루프 (Unix only)

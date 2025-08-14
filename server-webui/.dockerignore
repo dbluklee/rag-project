@@ -1,0 +1,88 @@
+# CHEESEADE RAG Server .dockerignore
+
+# === 볼륨으로 연결되는 디렉토리들 ===
+volumes/
+
+# === Git 관련 ===
+.git/
+.gitignore
+.gitattributes
+
+# === Docker 관련 ===
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# === 환경 설정 ===
+.env*
+*.env
+
+# === Python 캐시 및 임시 파일 ===
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+.pytest_cache/
+.coverage
+.tox/
+.cache/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# === 개발 도구 ===
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# === 로그 파일 ===
+*.log
+logs*
+
+# === 백업 및 임시 파일 ===
+*.backup
+*.bak
+*.tmp
+*.temp
+tmp/
+temp/
+
+# === 압축 파일 ===
+*.tar.gz
+*.zip
+*.rar
+
+# === OS 생성 파일 ===
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# === Jupyter Notebook ===
+.ipynb_checkpoints/
+*.ipynb
+
+# === 테스트 관련 ===
+test/
+tests/
+*_test.py
+test_*.py
+
+# === 문서화 ===
+docs_build/
+site/
+_site/
+
+# === 설치 파일 ===
+dist/
+build/
+*.egg-info/
+
+# === 로컬 개발용 ===
+.local/
+.venv/
+venv/
+env/

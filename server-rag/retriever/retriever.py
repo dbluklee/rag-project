@@ -34,6 +34,3 @@ def get_retriever(
     return retriever
 
 
-# 전처리 
-def format_docs(List) -> List:
-    return '\\n---\\n'.join('기능: '+doc.metadata['Header 2'] + '\\n' + doc.page_content for doc in docs)

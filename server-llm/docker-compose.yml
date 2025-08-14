@@ -22,7 +22,12 @@ services:
       - OLLAMA_HOST=0.0.0.0:11434
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
-
+    healthcheck:
+      test: ["CMD", "ollama", "ps"]
+      interval: 60s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
     restart: unless-stopped
 
   ollama-init:
@@ -32,19 +37,15 @@ services:
       - ../.env.global
       - .env
     depends_on:
-      - ollama
+      ollama: 
+        condition: service_healthy
     volumes:
       - ./ollama-init.sh:/ollama-init.sh
+      - ./check-model.sh:/check-model.sh
     entrypoint: ["/bin/sh", "/ollama-init.sh"]
     environment:
       - CONNECTION_TIMEOUT=300
       - LLM_SERVER_URL=http://${LLM_SERVER_IP}:${LLM_PORT}
       - MAX_RETRY=3
       - RETRY_DELAY=30
-    healthcheck:
-      test: ["CMD", "/bin/sh", "/check-model.sh"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 300s
     restart: "no"
