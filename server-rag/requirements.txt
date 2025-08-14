@@ -1,101 +1,28 @@
-# Samsung RAG Server Requirements (PyTorch 제외)
-# Python 3.11+ 지원, 최적화된 버전 고정
+# CHEESEADE RAG Server - 실제 사용 패키지만 (최신 버전)
 
 # === 웹 프레임워크 ===
-fastapi==0.104.1                    # FastAPI 웹 프레임워크
-uvicorn[standard]==0.24.0           # ASGI 서버 (uvloop, httptools 포함)
-python-multipart==0.0.6             # 파일 업로드 지원
-starlette==0.27.0                   # FastAPI 기반 프레임워크
-
-# === LangChain 생태계 ===
-langchain==0.1.0                    # LangChain 코어
-langchain-community==0.0.10         # 커뮤니티 확장
-langchain-core==0.1.0               # LangChain 핵심 추상화
-langchain-text-splitters==0.0.1     # 텍스트 분할 도구
-langchain-huggingface==0.0.1        # HuggingFace 통합
-langchain-milvus==0.0.1             # Milvus 벡터 스토어
-langchain-ollama==0.0.1             # Ollama LLM 통합
-
-# === 벡터 데이터베이스 ===
-pymilvus==2.3.4                     # Milvus Python SDK
-milvus==2.3.4                       # Milvus 클라이언트
-
-# === 임베딩 및 ML (PyTorch 제외) ===
-# HuggingFace 생태계
-transformers==4.36.2                # Transformer 모델
-sentence-transformers==2.2.2        # 문장 임베딩
-huggingface-hub==0.19.4             # HF 모델 허브
-tokenizers==0.15.0                  # 토크나이저
-safetensors==0.4.1                  # 안전한 텐서 저장
+fastapi                             # FastAPI 웹 프레임워크
+uvicorn[standard]                   # ASGI 서버 (uvloop, httptools 포함)
+pydantic                           # 데이터 검증
 
 # === HTTP 클라이언트 ===
-requests==2.31.0                    # HTTP 요청
-httpx==0.25.2                       # 비동기 HTTP 클라이언트
-aiohttp==3.9.1                      # 비동기 HTTP 서버/클라이언트
-urllib3==2.1.0                      # HTTP 라이브러리
+requests                           # HTTP 요청
 
-# === 데이터 처리 ===
-numpy==1.24.4                       # 수치 계산
-pandas==2.1.4                       # 데이터 분석
-scipy==1.11.4                       # 과학 계산
+# === LangChain 생태계 ===
+langchain                          # LangChain 코어
+langchain-core                     # LangChain 핵심 추상화
+langchain-text-splitters          # 텍스트 분할 도구
+langchain-huggingface             # HuggingFace 통합
+langchain-milvus                  # Milvus 벡터 스토어
+langchain-ollama                  # Ollama LLM 통합
 
-# === 텍스트 처리 ===
-nltk==3.8.1                         # 자연어 처리
-spacy==3.7.2                        # 고급 NLP
-regex==2023.10.3                    # 정규 표현식
-unidecode==1.3.7                    # 유니코드 정규화
+# === 벡터 데이터베이스 ===
+pymilvus                          # Milvus Python SDK
 
-# === 유틸리티 ===
-pydantic==2.5.2                     # 데이터 검증
-python-dotenv==1.0.0                # 환경변수 로드
-tqdm==4.66.1                        # 진행률 표시
-click==8.1.7                        # CLI 도구
-rich==13.7.0                        # 풍부한 터미널 출력
+# === 임베딩 및 ML (PyTorch 제외) ===
+transformers                      # Transformer 모델
+sentence-transformers            # 문장 임베딩
 
-# === 로깅 및 모니터링 ===
-structlog==23.2.0                   # 구조화된 로깅
-python-json-logger==2.0.7           # JSON 로깅
-psutil==5.9.6                       # 시스템 모니터링
+# === 기본 유틸리티 ===
+numpy                            # 수치 계산 (의존성)
 
-# === 비동기 처리 ===
-asyncio==3.4.3                      # 비동기 I/O
-aiofiles==23.2.1                    # 비동기 파일 I/O
-anyio==4.2.0                        # 비동기 네트워킹
-
-# === 보안 ===
-cryptography==41.0.8                # 암호화
-bcrypt==4.1.2                       # 비밀번호 해싱
-python-jose[cryptography]==3.3.0    # JWT 토큰
-
-# === 데이터 형식 지원 ===
-pyyaml==6.0.1                       # YAML 파싱
-toml==0.10.2                        # TOML 파싱
-python-magic==0.4.27                # 파일 타입 감지
-
-# === 성능 최적화 ===
-uvloop==0.19.0                      # 빠른 이벤트 루프 (Unix only)
-orjson==3.9.10                      # 빠른 JSON 라이브러리
-msgpack==1.0.7                      # 메시지 팩 직렬화
-
-# === 메모리 최적화 ===
-pympler==0.9                        # 메모리 프로파일링
-memory-profiler==0.61.0             # 메모리 사용량 측정
-
-# === 네트워킹 ===
-dnspython==2.4.2                    # DNS 조회
-ipaddress==1.0.23                   # IP 주소 처리
-
-# === 파일 처리 ===
-chardet==5.2.0                      # 문자 인코딩 감지
-pathlib2==2.3.7                     # 경로 처리 (Python < 3.4)
-
-# === 시간 처리 ===
-python-dateutil==2.8.2              # 날짜/시간 유틸리티
-pytz==2023.3.post1                  # 시간대 처리
-
-# === 캐싱 ===
-cachetools==5.3.2                   # 메모리 캐싱
-diskcache==5.6.3                    # 디스크 캐싱
-
-# === 설정 관리 ===
-pydantic-settings==2.1.0            # Pydantic 기반 설정

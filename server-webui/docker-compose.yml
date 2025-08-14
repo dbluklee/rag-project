@@ -6,11 +6,11 @@ services:
       - .env
     container_name: cheeseade-webui
     ports:
-      - '${WEBUI_PORT:-3000}:8080'
+      - '3000:8080'
     environment:
       # 멀티 커넥션 설정
       - 'ENABLE_OLLAMA_API=true'
-      - 'OLLAMA_BASE_URLS=${RAG_SERVER_URL};${LLM_SERVER_URL}'
+      - 'OLLAMA_BASE_URLS=${LLM_SERVER_URL};${LLM_SERVER_URL}'
       
       # 기본 설정
       - 'WEBUI_AUTH=false'
@@ -24,9 +24,6 @@ services:
     
     restart: unless-stopped
 
-    depends_on:
-      - rag-server
-    
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s

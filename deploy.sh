@@ -4,8 +4,8 @@ echo "🚀 치즈에이드 RAG 시스템 배포 시작"
 # 환경변수 로드
 if [ -f ".env.global" ]; then
     set -a
-    source .env.global
-    set +a
+    source .env.global 
+    set +a 
     echo "✅ 전역 환경변수 로드됨"
 else
     echo "⚠️ .env.global 파일이 없습니다."
@@ -41,22 +41,43 @@ fi
 
 echo "✅ RAG를 위한 $DOC_COUNT 개의 문서 파일 확인됨"
 
-# 배포 순서 (의존성 고려)
+# 기존 컨테이너와 이미지 정리
 echo ""
-echo "1️⃣ Milvus Server 시작..."
-cd server-milvus && docker compose up -d && cd ..
+echo "🧹 기존 컨테이너 및 이미지 정리 중..."
+docker compose -f server-milvus/docker-compose.yml down --remove-orphans 2>/dev/null || true
+docker compose -f server-llm/docker-compose.yml down --remove-orphans 2>/dev/null || true
+docker compose -f server-rag/docker-compose.yml down --remove-orphans 2>/dev/null || true
+docker compose -f server-webui/docker-compose.yml down --remove-orphans 2>/dev/null || true
+
+# 배포 순서 (의존성 고려) - 완전히 캐시 없는 재빌드
+echo ""
+echo "1️⃣ Milvus Server 시작 (캐시 없는 재빌드)..."
+cd server-milvus 
+docker compose up -d --build --force-recreate --no-cache --remove-orphans 
+pwd
+cd ..
+pwd
 sleep 5
 
-echo "2️⃣ LLM Server 시작..."
-cd server-llm && docker compose up -d && cd ..
+echo "2️⃣ LLM Server 시작 (캐시 없는 재빌드)..."
+cd server-llm 
+docker compose up -d --build --force-recreate --no-cache --remove-orphans 
+pwd
+cd ..
+pwd
 sleep 5
 
-echo "3️⃣ RAG Server 시작..."
-cd server-rag && docker compose up -d && cd ..
+echo "3️⃣ RAG Server 시작 (캐시 없는 재빌드)..."
+cd server-rag 
+docker compose up -d --build --force-recreate --no-cache --remove-orphans
+cd ..
 sleep 5
 
-echo "4️⃣ WebUI Server 시작..."
-cd server-webui && docker compose up -d && cd ..
+echo "4️⃣ WebUI Server 시작 (캐시 없는 재빌드)..."
+cd server-webui 
+docker compose up -d --build --force-recreate --no-cache --remove-orphans
+cd ..
+
 
 echo ""
 echo "✅ 모든 서버 시작 완료!"
