@@ -7,6 +7,7 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 CYAN='\033[0;36m'
+PURPLE='\033[0;35m'
 NC='\033[0m' # No Color
 
 # 환경변수 로드
@@ -46,6 +47,78 @@ if [ "$DOC_COUNT" -eq 0 ]; then
 fi
 
 echo "✅ RAG를 위한 $DOC_COUNT 개의 문서 파일 확인됨"
+
+# 전역 상태 변수
+OVERALL_STATUS=0
+SERVICES_TOTAL=0
+SERVICES_HEALTHY=0
+
+# WebUI 초기화 함수
+initialize_webui() {
+    echo ""
+    echo -e "${PURPLE}🧹 WebUI 완전 초기화 시작${NC}"
+    echo "========================================"
+    
+    cd server-webui || {
+        echo -e "${RED}❌ server-webui 디렉토리 접근 실패${NC}"
+        return 1
+    }
+    
+    # 기존 컨테이너 중지 및 제거
+    echo "🛑 기존 WebUI 컨테이너 중지..."
+    docker compose down --remove-orphans 2>/dev/null || true
+    
+    # 데이터 백업 및 삭제
+    echo "📁 WebUI 데이터 초기화..."
+    if [ -d "data" ]; then
+        backup_name="data_backup_$(date +%Y%m%d_%H%M%S)"
+        mv data "$backup_name"
+        echo "   📦 기존 데이터 백업: $backup_name"
+    fi
+    
+    if [ -d "config" ]; then
+        backup_name="config_backup_$(date +%Y%m%d_%H%M%S)"
+        mv config "$backup_name"
+        echo "   📦 기존 설정 백업: $backup_name"
+    fi
+    
+    # 새 디렉토리 생성
+    mkdir -p data config
+    echo "   ✅ 새 data, config 디렉토리 생성"
+    
+    # 최적화된 .env 파일 생성
+    echo "🔧 WebUI 환경변수 최적화..."
+    cat > .env << 'EOF'
+# UI 설정
+WEBUI_NAME=CHEESEADE AI Assistant
+
+# 인증 설정 (완전 비활성화)
+WEBUI_AUTH=false
+ENABLE_LOGIN_FORM=false
+ENABLE_API_KEY=false
+
+# Ollama API 설정
+ENABLE_OLLAMA_API=true
+
+# 기본 모델 설정
+DEFAULT_MODELS=gemma3:27b-it-q4_K_M,rag-cheeseade:latest
+
+# 성능 최적화
+ENABLE_MODEL_FILTER=true
+ENABLE_EVALUATION_ARENA_MODELS=false
+ENABLE_COMMUNITY_SHARING=false
+
+# 보안 설정
+ENABLE_SIGNUP=false
+ENABLE_LOGIN_FORM=false
+EOF
+    
+    echo "   ✅ 최적화된 .env 파일 생성"
+    
+    cd ..
+    echo -e "${GREEN}🎉 WebUI 초기화 완료!${NC}"
+    return 0
+}
 
 # 헬스체크 함수들
 check_milvus_health() {
@@ -144,12 +217,6 @@ check_llm_health() {
             # 모델 다운로드 진행 상황 표시 (30초마다)
             if [ $((attempt % 6)) -eq 0 ]; then
                 echo -e "      💡 대용량 모델 다운로드 중입니다. 시간이 오래 걸릴 수 있습니다."
-                
-                # 다운로드 중인지 확인
-                ollama_logs=$(docker logs --tail 20 llm-server 2>/dev/null || echo "")
-                if echo "$ollama_logs" | grep -q -i "pulling\|downloading"; then
-                    echo -e "      📥 현재 모델 다운로드 진행 중..."
-                fi
             fi
         fi
         
@@ -158,8 +225,6 @@ check_llm_health() {
     done
     
     echo -e "${RED}❌ LLM 서버 헬스체크 실패 (타임아웃)${NC}"
-    echo -e "   💡 모델 다운로드가 완료되지 않았을 수 있습니다."
-    echo -e "   🔍 로그 확인: docker logs llm-server"
     return 1
 }
 
@@ -221,30 +286,10 @@ check_rag_health() {
         models_response=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 "${RAG_SERVER_URL}/api/models" 2>/dev/null)
         if [ "$models_response" = "200" ]; then
             echo -e "${GREEN}✅ RAG 서버 준비 완료! (모델 API 응답)${NC}"
-            
-            # 사용 가능한 모델 확인
-            models_data=$(curl -s --connect-timeout 3 "${RAG_SERVER_URL}/api/models" 2>/dev/null)
-            if echo "$models_data" | grep -q "$RAG_MODEL_NAME"; then
-                echo -e "   🤖 RAG 모델 확인됨: ${RAG_MODEL_NAME}"
-            fi
             return 0
         fi
         
-        # 4. Ollama 스타일 태그 API 확인
-        tags_response=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 "${RAG_SERVER_URL}/api/tags" 2>/dev/null)
-        if [ "$tags_response" = "200" ]; then
-            echo -e "${GREEN}✅ RAG 서버 준비 완료! (태그 API 응답)${NC}"
-            return 0
-        fi
-        
-        # 5. 기본 루트 엔드포인트 확인
-        root_response=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 "${RAG_SERVER_URL}/" 2>/dev/null)
-        if [ "$root_response" = "200" ]; then
-            echo -e "${GREEN}✅ RAG 서버 기본 응답 확인! (루트 엔드포인트)${NC}"
-            return 0
-        fi
-        
-        # 6. 상세한 디버그 정보 (5번마다)
+        # 4. 상세한 디버그 정보 (5번마다)
         if [ $((attempt % 5)) -eq 0 ]; then
             echo -e "${YELLOW}상세 디버그 정보:${NC}"
             
@@ -252,20 +297,9 @@ check_rag_health() {
             echo -e "   🔍 엔드포인트 응답 코드:"
             health_code=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 3 "${RAG_SERVER_URL}/health" 2>/dev/null || echo "000")
             models_code=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 3 "${RAG_SERVER_URL}/api/models" 2>/dev/null || echo "000")
-            root_code=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 3 "${RAG_SERVER_URL}/" 2>/dev/null || echo "000")
             
             echo -e "     /health: ${health_code}"
             echo -e "     /api/models: ${models_code}" 
-            echo -e "     /: ${root_code}"
-            
-            # Docker 컨테이너 내부 포트 상태 확인 (로컬에서)
-            echo -e "   🔌 Docker 포트 상태:"
-            docker_port_info=$(docker port cheeseade-rag-server 2>/dev/null || echo "포트 정보 확인 불가")
-            echo -e "     Docker 매핑: ${docker_port_info}"
-            
-            # 컨테이너 내부 포트 8000 확인
-            container_port_check=$(docker exec cheeseade-rag-server ss -tuln 2>/dev/null | grep ":8000" || echo "컨테이너 내부 포트 확인 불가")
-            echo -e "     컨테이너 내부: ${container_port_check}"
             
             # 로그 확인
             rag_logs=$(docker logs --tail 10 cheeseade-rag-server 2>/dev/null || echo "로그 확인 불가")
@@ -280,12 +314,6 @@ check_rag_health() {
     done
     
     echo -e "${RED}❌ RAG 서버 헬스체크 실패 (타임아웃)${NC}"
-    echo -e "   🔍 최종 진단:"
-    echo -e "     1. 공유기 포트포워딩: ${RAG_SERVER_URL}"
-    echo -e "     2. 컨테이너 로그: docker logs cheeseade-rag-server"
-    echo -e "     3. 수동 테스트: curl -v ${RAG_SERVER_URL}/health"
-    echo -e "     4. Docker 포트: docker port cheeseade-rag-server"
-    echo -e "     5. 네트워크: 공유기 포트포워딩 1886→8000 확인"
     return 1
 }
 
@@ -298,9 +326,11 @@ check_webui_health() {
     while [ $attempt -le $max_attempts ]; do
         echo -n "   시도 $attempt/$max_attempts: "
         
-        # WebUI 헬스체크
-        if curl -s --connect-timeout 5 "${WEBUI_SERVER_URL}/health" >/dev/null 2>&1; then
+        # WebUI 기본 페이지 확인
+        if curl -s --connect-timeout 5 "${WEBUI_SERVER_URL}/" >/dev/null 2>&1; then
             echo -e "${GREEN}✅ WebUI 준비 완료!${NC}"
+            echo -e "   🌐 WebUI 페이지 로드 정상"
+            echo -e "   🧹 데이터 초기화됨 - 깨끗한 상태로 시작"
             return 0
         else
             echo -e "${YELLOW}WebUI 초기화 대기 중...${NC}"
@@ -335,18 +365,9 @@ cleanup_on_failure() {
             docker compose -f server-rag/docker-compose.yml down --remove-orphans 2>/dev/null || true
             docker compose -f server-llm/docker-compose.yml down --remove-orphans 2>/dev/null || true
             docker compose -f server-milvus/docker-compose.yml down --remove-orphans 2>/dev/null || true
-            
-            # 남은 컨테이너 강제 정리
-            containers=$(docker ps -a --filter "name=cheeseade" --format "{{.Names}}" 2>/dev/null)
-            if [ -n "$containers" ]; then
-                echo -e "   🛑 남은 컨테이너 강제 제거..."
-                echo "$containers" | xargs docker rm -f 2>/dev/null || true
-            fi
         }
         
         echo -e "${GREEN}   ✅ 시스템 정리 완료${NC}"
-    else
-        echo -e "${YELLOW}   ⚠️ stop.sh 파일을 찾을 수 없습니다${NC}"
     fi
 }
 
@@ -356,6 +377,8 @@ start_service() {
     local service_name="$2"
     local description="$3"
     local health_check_func="$4"
+    
+    SERVICES_TOTAL=$((SERVICES_TOTAL + 1))
     
     echo ""
     echo -e "${BLUE}🔄 $service_name 시작 중...${NC} ($description)"
@@ -418,6 +441,7 @@ start_service() {
     fi
     
     echo -e "${GREEN}🎉 $service_name 완전히 준비됨!${NC}"
+    SERVICES_HEALTHY=$((SERVICES_HEALTHY + 1))
     return 0
 }
 
@@ -431,6 +455,9 @@ docker compose -f server-milvus/docker-compose.yml down --remove-orphans 2>/dev/
 
 echo -e "${GREEN}✅ 정리 완료${NC}"
 
+# WebUI 초기화 실행
+initialize_webui
+
 # 전역 에러 핸들러 설정
 set -e  # 어떤 명령이든 실패하면 즉시 종료
 trap 'cleanup_on_failure' ERR  # 에러 발생 시 정리 함수 호출
@@ -441,28 +468,16 @@ echo -e "${CYAN}🎯 의존성 순서에 따른 서비스 시작${NC}"
 echo -e "   순서: Milvus → LLM → RAG → WebUI"
 
 # 1. Milvus Server (가장 기본이 되는 데이터베이스)
-if ! start_service "server-milvus" "Milvus Server" "벡터 데이터베이스" "check_milvus_health"; then
-    echo -e "${RED}💥 Milvus Server 시작 실패${NC}"
-    exit 1
-fi
+start_service "server-milvus" "Milvus Server" "벡터 데이터베이스" "check_milvus_health"
 
 # 2. LLM Server (RAG가 의존하는 언어 모델)
-if ! start_service "server-llm" "LLM Server" "언어 모델 서버" "check_llm_health"; then
-    echo -e "${RED}💥 LLM Server 시작 실패${NC}"
-    exit 1
-fi
+start_service "server-llm" "LLM Server" "언어 모델 서버" "check_llm_health"
 
 # 3. RAG Server (Milvus와 LLM에 의존)
-if ! start_service "server-rag" "RAG Server" "API 및 검색 서버" "check_rag_health"; then
-    echo -e "${RED}💥 RAG Server 시작 실패${NC}"
-    exit 1
-fi
+start_service "server-rag" "RAG Server" "API 및 검색 서버" "check_rag_health"
 
-# 4. WebUI Server (모든 백엔드 서비스에 의존)
-if ! start_service "server-webui" "WebUI Server" "사용자 인터페이스" "check_webui_health"; then
-    echo -e "${RED}💥 WebUI Server 시작 실패${NC}"
-    exit 1
-fi
+# 4. WebUI Server (모든 백엔드 서비스에 의존) - 초기화됨
+start_service "server-webui" "WebUI Server" "사용자 인터페이스 (초기화됨)" "check_webui_health"
 
 # 에러 핸들러 해제 (정상 완료)
 set +e
@@ -474,7 +489,7 @@ echo -e "${CYAN}🔍 전체 시스템 최종 검증...${NC}"
 
 # 모든 컨테이너 상태 확인
 echo -e "📋 실행 중인 컨테이너:"
-running_containers=$(docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | grep -E "cheeseade|llm-server|rag-server|webui")
+running_containers=$(docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | grep -E "cheeseade|llm-server")
 if [ -n "$running_containers" ]; then
     echo "$running_containers"
     
@@ -500,13 +515,26 @@ echo ""
 echo -e "${CYAN}📊 다음 단계:${NC}"
 echo "   1. 📋 상태 확인: ./health-check.sh"
 echo "   2. 🌐 브라우저 접속: http://${WEBUI_SERVER_IP}:${WEBUI_PORT}"
-echo "   3. 🤖 사용 가능한 모델:"
+echo "      ⚠️ 중요: 시크릿/인코그니토 모드로 접속 (캐시 방지)"
+echo "   3. 🔧 서버 연결 설정:"
+echo "      • Settings → Connections"
+echo "      • LLM Server: http://${WEBUI_SERVER_IP}:${LLM_PORT}"
+echo "      • RAG Server: http://${WEBUI_SERVER_IP}:${RAG_PORT}"
+echo "   4. 🤖 사용 가능한 모델:"
 echo "      • ${RAG_MODEL_NAME} (CHEESEADE RAG를 활용한 전문 상담)"
 echo "      • ${LLM_MODEL_NAME} (일반 대화)"
+echo ""
+echo -e "${PURPLE}🧹 WebUI 초기화 완료:${NC}"
+echo "   • 이전 채팅 기록 완전 삭제됨"
+echo "   • 서버 연결 설정 초기화됨"  
+echo "   • 브라우저 캐시와 무관한 깨끗한 상태"
+echo "   • 최적화된 환경변수 적용됨"
 echo ""
 echo -e "${BLUE}🔧 문제 발생 시:${NC}"
 echo "   • 로그 수집: ./monitoring/logs-collect.sh"
 echo "   • 시스템 재시작: ./stop.sh && ./deploy.sh"
+echo "   • 브라우저 캐시 삭제 또는 시크릿 모드 사용"
 echo ""
 echo -e "${GREEN}✨ 배포가 성공적으로 완료되었습니다!${NC}"
+echo -e "${YELLOW}💡 첫 접속 시 반드시 시크릿 모드를 사용하세요!${NC}"
 echo ""

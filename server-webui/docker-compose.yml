@@ -10,29 +10,11 @@ services:
     environment:
       # 멀티 커넥션 설정
       - 'ENABLE_OLLAMA_API=true'
-      - 'OLLAMA_BASE_URLS=${LLM_SERVER_URL};${LLM_SERVER_URL}'
-      - 'OLLAMA_BASE_URLS=http://${LLM_SERVER_IP}:${LLM_PORT};http://${RAG_SERVER_IP}:${RAG_PORT}'
+      - 'OLLAMA_BASE_URL=http://${LLM_SERVER_IP}:${LLM_PORT}"'
 
-      # 🎯 모델별 서버 매핑 설정 (추가)
-      - 'OLLAMA_SERVERS=[
-          {
-            "name": "LLM Server", 
-            "url": "http://${LLM_SERVER_IP}:${LLM_PORT}",
-            "models": ["gemma3:27b-it-q4_K_M"]
-          },
-          {
-            "name": "RAG Server", 
-            "url": "http://${RAG_SERVER_IP}:${RAG_PORT}",
-            "models": ["rag-cheeseade:latest"]
-          }
-        ]'
-      
       # 기본 설정
-      - 'WEBUI_AUTH=false'
-      - 'ENABLE_LOGIN_FORM=false'
       - 'DEFAULT_MODELS=${RAG_MODEL_NAME},${LLM_MODEL_NAME}'
-      - 'ENABLE_API_KEY=false'
-      
+  
     volumes:
       - ./data:/app/backend/data
       - ./config:/app/backend/config
