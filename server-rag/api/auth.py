@@ -144,6 +144,7 @@ async def get_current_user_optional(authorization: Optional[str] = Header(None))
     """선택적 사용자 정보 반환 (인증 실패해도 None 반환)"""
     try:
         return auth_service.verify_api_key(authorization)
-    except HTTPException:
+    except (HTTPException, TypeError, AttributeError):
         # 인증 실패시 None 반환 (선택적 인증)
+        # TypeError, AttributeError 추가로 Header 관련 에러 처리
         return None

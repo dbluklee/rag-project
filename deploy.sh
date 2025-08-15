@@ -182,16 +182,8 @@ check_rag_health() {
             continue
         fi
         
-        # 2. 포트 확인
-        if ! netstat -tuln 2>/dev/null | grep -q ":${RAG_PORT} " && ! ss -tuln 2>/dev/null | grep -q ":${RAG_PORT} "; then
-            echo -e "${YELLOW}포트 ${RAG_PORT} 대기 중...${NC}"
-            sleep 5
-            attempt=$((attempt + 1))
-            continue
-        fi
-        
-        # 3. 헬스체크 엔드포인트 확인 (우선순위 1)
-        health_response=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 3 "${RAG_SERVER_URL}/health" 2>/dev/null)
+        # 2. 헬스체크 엔드포인트 직접 확인 (공유기 포트포워딩 통해서)
+        health_response=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 "${RAG_SERVER_URL}/health" 2>/dev/null)
         if [ "$health_response" = "200" ]; then
             echo -e "${GREEN}✅ RAG 서버 준비 완료! (헬스체크 통과)${NC}"
             
@@ -212,11 +204,21 @@ check_rag_health() {
                     echo -e "   🖥️ 임베딩 디바이스: ${device}"
                 fi
             fi
+            
+            # 로컬 Docker 포트 확인 (정보용, 실패해도 성공으로 처리)
+            local_port_check=$(docker port cheeseade-rag-server 8000 2>/dev/null | head -1)
+            if [ -n "$local_port_check" ]; then
+                echo -e "   🔌 Docker 포트 매핑: $local_port_check"
+            fi
+            
+            # 공유기 포트포워딩 확인 (정보용)
+            echo -e "   🌐 공유기 포트포워딩: ${RAG_SERVER_URL} → 서버PC:8000"
+            
             return 0
         fi
         
-        # 4. 모델 API 확인 (우선순위 2)
-        models_response=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 3 "${RAG_SERVER_URL}/api/models" 2>/dev/null)
+        # 3. 모델 API 확인 (헬스체크 실패시 대안)
+        models_response=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 "${RAG_SERVER_URL}/api/models" 2>/dev/null)
         if [ "$models_response" = "200" ]; then
             echo -e "${GREEN}✅ RAG 서버 준비 완료! (모델 API 응답)${NC}"
             
@@ -228,54 +230,49 @@ check_rag_health() {
             return 0
         fi
         
-        # 5. Ollama 스타일 태그 API 확인 (우선순위 3)
-        tags_response=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 3 "${RAG_SERVER_URL}/api/tags" 2>/dev/null)
+        # 4. Ollama 스타일 태그 API 확인
+        tags_response=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 "${RAG_SERVER_URL}/api/tags" 2>/dev/null)
         if [ "$tags_response" = "200" ]; then
             echo -e "${GREEN}✅ RAG 서버 준비 완료! (태그 API 응답)${NC}"
             return 0
         fi
         
-        # 6. 기본 루트 엔드포인트 확인 (우선순위 4)
-        root_response=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 3 "${RAG_SERVER_URL}/" 2>/dev/null)
+        # 5. 기본 루트 엔드포인트 확인
+        root_response=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 "${RAG_SERVER_URL}/" 2>/dev/null)
         if [ "$root_response" = "200" ]; then
             echo -e "${GREEN}✅ RAG 서버 기본 응답 확인! (루트 엔드포인트)${NC}"
             return 0
         fi
         
-        # 7. 로그 기반 진행 상황 확인
+        # 6. 상세한 디버그 정보 (5번마다)
         if [ $((attempt % 5)) -eq 0 ]; then
-            rag_logs=$(docker logs --tail 30 cheeseade-rag-server 2>/dev/null || echo "")
+            echo -e "${YELLOW}상세 디버그 정보:${NC}"
             
-            if echo "$rag_logs" | grep -q -i "error\|failed\|exception"; then
-                echo -e "${RED}오류 감지됨${NC}"
-                echo -e "      🔍 최근 오류 로그:"
-                echo "$rag_logs" | grep -i -E "error|failed|exception" | tail -3 | sed 's/^/        /'
-            elif echo "$rag_logs" | grep -q -i "자동.*다운로드\|downloading\|snapshot_download"; then
-                echo -e "${CYAN}자동 모델 다운로드 중...${NC}"
-            elif echo "$rag_logs" | grep -q -i "loading\|embedding.*model\|임베딩.*모델"; then
-                echo -e "${CYAN}임베딩 모델 로딩 중...${NC}"
-            elif echo "$rag_logs" | grep -q -i "milvus.*connect\|vector.*store"; then
-                echo -e "${CYAN}벡터 DB 연결 중...${NC}"
-            elif echo "$rag_logs" | grep -q -i "fastapi\|uvicorn\|server.*start"; then
-                echo -e "${CYAN}웹 서버 시작 중...${NC}"
-            elif echo "$rag_logs" | grep -q -i "rag.*체인\|chat.*handler"; then
-                echo -e "${CYAN}RAG 체인 구성 중...${NC}"
-            elif echo "$rag_logs" | grep -q -i "chunking\|청킹"; then
-                echo -e "${CYAN}문서 청킹 중...${NC}"
-            else
-                echo -e "${YELLOW}RAG 서버 초기화 대기 중...${NC}"
-            fi
+            # HTTP 응답 코드들 확인
+            echo -e "   🔍 엔드포인트 응답 코드:"
+            health_code=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 3 "${RAG_SERVER_URL}/health" 2>/dev/null || echo "000")
+            models_code=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 3 "${RAG_SERVER_URL}/api/models" 2>/dev/null || echo "000")
+            root_code=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 3 "${RAG_SERVER_URL}/" 2>/dev/null || echo "000")
             
-            # 진행상황 표시
-            if [ $attempt -eq 60 ]; then
-                echo -e "      💡 5분 경과: 모델 다운로드가 진행 중일 수 있습니다"
-            elif [ $attempt -eq 120 ]; then
-                echo -e "      💡 10분 경과: 대용량 모델 다운로드 중입니다"
-            elif [ $attempt -eq 150 ]; then
-                echo -e "      💡 12.5분 경과: 거의 완료되었습니다"
-            fi
+            echo -e "     /health: ${health_code}"
+            echo -e "     /api/models: ${models_code}" 
+            echo -e "     /: ${root_code}"
+            
+            # Docker 컨테이너 내부 포트 상태 확인 (로컬에서)
+            echo -e "   🔌 Docker 포트 상태:"
+            docker_port_info=$(docker port cheeseade-rag-server 2>/dev/null || echo "포트 정보 확인 불가")
+            echo -e "     Docker 매핑: ${docker_port_info}"
+            
+            # 컨테이너 내부 포트 8000 확인
+            container_port_check=$(docker exec cheeseade-rag-server ss -tuln 2>/dev/null | grep ":8000" || echo "컨테이너 내부 포트 확인 불가")
+            echo -e "     컨테이너 내부: ${container_port_check}"
+            
+            # 로그 확인
+            rag_logs=$(docker logs --tail 10 cheeseade-rag-server 2>/dev/null || echo "로그 확인 불가")
+            echo -e "   📋 최근 로그:"
+            echo "$rag_logs" | tail -3 | sed 's/^/     /'
         else
-            echo -e "${YELLOW}RAG 서버 초기화 대기 중...${NC}"
+            echo -e "${YELLOW}RAG 서버 초기화 대기 중... (${health_response:-000})${NC}"
         fi
         
         sleep 5
@@ -283,11 +280,12 @@ check_rag_health() {
     done
     
     echo -e "${RED}❌ RAG 서버 헬스체크 실패 (타임아웃)${NC}"
-    echo -e "   🔍 문제 진단:"
-    echo -e "     1. 컨테이너 로그 확인: docker logs cheeseade-rag-server"
-    echo -e "     2. 포트 확인: netstat -tuln | grep ${RAG_PORT}"
-    echo -e "     3. 수동 헬스체크: curl ${RAG_SERVER_URL}/health"
-    echo -e "     4. 시스템 리소스: free -h && df -h"
+    echo -e "   🔍 최종 진단:"
+    echo -e "     1. 공유기 포트포워딩: ${RAG_SERVER_URL}"
+    echo -e "     2. 컨테이너 로그: docker logs cheeseade-rag-server"
+    echo -e "     3. 수동 테스트: curl -v ${RAG_SERVER_URL}/health"
+    echo -e "     4. Docker 포트: docker port cheeseade-rag-server"
+    echo -e "     5. 네트워크: 공유기 포트포워딩 1886→8000 확인"
     return 1
 }
 

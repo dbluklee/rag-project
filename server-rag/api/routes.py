@@ -176,8 +176,8 @@ async def chat_completions(
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/api/chat")
-async def chat_simple(request: dict):
-    """간단한 채팅 엔드포인트 (호환성용)"""
+async def chat_simple(request: dict, authorization: Optional[str] = Header(None)):
+    """간단한 채팅 엔드포인트 (호환성용) - 헤더 에러 수정"""
     print(f"🎯 POST /api/chat (간단한 형식)")
     
     if not chat_handler:
@@ -198,7 +198,25 @@ async def chat_simple(request: dict):
             stream=request.get("stream", False)
         )
         
-        return await chat_completions(chat_request)
+        # chat_completions 함수를 직접 호출하지 않고 chat_handler 사용
+        try:
+            if chat_request.stream:
+                return StreamingResponse(
+                    chat_handler.stream_rag_response(question, chat_request.model),
+                    media_type="text/plain",
+                    headers={
+                        "Cache-Control": "no-cache",
+                        "Connection": "keep-alive",
+                    }
+                )
+            else:
+                # chat_handler로 직접 처리
+                response_dict = await chat_handler.handle_chat_request(chat_request)
+                return response_dict
+                
+        except Exception as e:
+            print(f"❌ 간단 채팅 API 오류: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
     else:
         raise HTTPException(
             status_code=400,

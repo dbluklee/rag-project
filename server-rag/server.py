@@ -35,7 +35,9 @@ RAG_MODEL_NAME = os.environ["RAG_MODEL_NAME"]
 MILVUS_SERVER_IP = os.environ["MILVUS_SERVER_IP"]
 MILVUS_PORT = os.environ["MILVUS_PORT"]
 LLM_MODEL_NAME = os.environ["LLM_MODEL_NAME"]
-collection_name = os.environ["COMPANY_NAME"].lower+'_'+os.environ["METRIC_TYPE"].lower+'_'+os.environ["INDEX_TYPE"].lower
+collection_name = os.environ["COMPANY_NAME"].lower()+'_'+os.environ["METRIC_TYPE"].lower()+'_'+os.environ["INDEX_TYPE"].lower()
+METRIC_TYPE = os.environ["METRIC_TYPE"]
+INDEX_TYPE = os.environ["INDEX_TYPE"]
 
 print(f"✅ 환경변수 설정 완료")
 print(f"   LLM 서버: {LLM_SERVER_URL}")
