@@ -10,10 +10,11 @@ services:
     environment:
       # 멀티 커넥션 설정
       - 'ENABLE_OLLAMA_API=true'
-      - 'OLLAMA_BASE_URL=http://${RAG_SERVER_IP}:${RAG_PORT},http://${LLM_SERVER_IP}:${LLM_PORT}'
+      - 'OLLAMA_BASE_URL=http://${RAG_SERVER_IP}:${RAG_PORT};http://${LLM_SERVER_IP}:${LLM_PORT}'
 
       # 기본 설정
       - 'DEFAULT_MODELS=${RAG_MODEL_NAME},${LLM_MODEL_NAME}'
+      - 'MODEL_FILTER_LIST=${RAG_MODEL_NAME};${LLM_MODEL_NAME}'
   
     volumes:
       - ./data:/app/backend/data
