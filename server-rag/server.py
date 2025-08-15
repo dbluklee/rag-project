@@ -22,8 +22,8 @@ from retriever.retriever import get_retriever
 from vector_db.milvus import MilvusVectorStore
 
 # API 모듈들 import
-from api.routes import router as api_router, set_chat_handler
-from api.chat_handler import ChatHandler
+from api.ollama_api import router as api_router, set_chat_handler
+from api.chat_handler import ChatHandler 
 
 # ================================
 # 환경변수 설정

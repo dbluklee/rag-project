@@ -283,7 +283,7 @@ check_rag_health() {
         fi
         
         # 3. 모델 API 확인 (헬스체크 실패시 대안)
-        models_response=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 "${RAG_SERVER_URL}/api/models" 2>/dev/null)
+        models_response=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 "${RAG_SERVER_URL}/api/tags" 2>/dev/null)
         if [ "$models_response" = "200" ]; then
             echo -e "${GREEN}✅ RAG 서버 준비 완료! (모델 API 응답)${NC}"
             return 0
@@ -296,10 +296,10 @@ check_rag_health() {
             # HTTP 응답 코드들 확인
             echo -e "   🔍 엔드포인트 응답 코드:"
             health_code=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 3 "${RAG_SERVER_URL}/health" 2>/dev/null || echo "000")
-            models_code=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 3 "${RAG_SERVER_URL}/api/models" 2>/dev/null || echo "000")
+            models_code=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 3 "${RAG_SERVER_URL}/api/tags" 2>/dev/null || echo "000")
             
             echo -e "     /health: ${health_code}"
-            echo -e "     /api/models: ${models_code}" 
+            echo -e "     /api/tags: ${models_code}" 
             
             # 로그 확인
             rag_logs=$(docker logs --tail 10 cheeseade-rag-server 2>/dev/null || echo "로그 확인 불가")
