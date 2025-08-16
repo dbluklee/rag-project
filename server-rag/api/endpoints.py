@@ -1,6 +1,6 @@
 # server-rag/api/endpoints.py
 """
-API 엔드포인트 정의
+API 엔드포인트 정의 - RAG 모델만 제공하도록 수정
 """
 import os
 import time
@@ -14,7 +14,6 @@ from .responses import (
     create_chat_error_response, create_generate_error_response
 )
 from .streaming import rag_chat_stream, rag_generate_stream
-from .proxy import proxy_chat_to_ollama, proxy_generate_to_ollama
 
 # 전역 채팅 핸들러
 chat_handler = None
@@ -32,7 +31,7 @@ def get_chat_handler():
     return chat_handler
 
 async def handle_chat_request(request: OllamaChatRequest):
-    """채팅 요청 처리"""
+    """채팅 요청 처리 - RAG 모델만 지원"""
     handler = get_chat_handler()
     
     # 사용자 메시지 추출
@@ -43,7 +42,7 @@ async def handle_chat_request(request: OllamaChatRequest):
     question = user_message.content
     
     try:
-        # RAG 모델 확인
+        # RAG 모델만 지원
         if request.model == handler.rag_model_name:
             if request.stream:
                 return StreamingResponse(
@@ -54,18 +53,22 @@ async def handle_chat_request(request: OllamaChatRequest):
                 response_content = await handler.process_with_rag(question)
                 return create_chat_response(request.model, response_content)
         else:
-            return await proxy_chat_to_ollama(handler, request)
+            # RAG 모델이 아닌 경우 오류 응답
+            return create_chat_error_response(
+                request.model, 
+                f"Model '{request.model}' not supported. Only '{handler.rag_model_name}' is available on this RAG server."
+            )
             
     except Exception as e:
         print(f"❌ 채팅 처리 오류: {str(e)}")
         return create_chat_error_response(request.model, str(e))
 
 async def handle_generate_request(request: OllamaGenerateRequest):
-    """생성 요청 처리"""
+    """생성 요청 처리 - RAG 모델만 지원"""
     handler = get_chat_handler()
     
     try:
-        # RAG 모델 확인
+        # RAG 모델만 지원
         if request.model == handler.rag_model_name:
             if request.stream:
                 return StreamingResponse(
@@ -76,17 +79,21 @@ async def handle_generate_request(request: OllamaGenerateRequest):
                 response_content = await handler.process_with_rag(request.prompt)
                 return create_generate_response(request.model, response_content)
         else:
-            return await proxy_generate_to_ollama(handler, request)
+            # RAG 모델이 아닌 경우 오류 응답
+            return create_generate_error_response(
+                request.model,
+                f"Model '{request.model}' not supported. Only '{handler.rag_model_name}' is available on this RAG server."
+            )
             
     except Exception as e:
         print(f"❌ 생성 처리 오류: {str(e)}")
         return create_generate_error_response(request.model, str(e))
 
 def get_model_list() -> Dict[str, Any]:
-    """모델 목록 생성"""
+    """모델 목록 생성 - RAG 모델만 제공"""
     rag_model_name = os.environ.get("RAG_MODEL_NAME", "rag-cheeseade:latest")
-    llm_model_name = os.environ.get("LLM_MODEL_NAME", "gemma3:27b-it-q4_K_M")
     
+    # RAG 모델만 포함
     models = [
         {
             "name": rag_model_name,
@@ -102,21 +109,6 @@ def get_model_list() -> Dict[str, Any]:
                 "parameter_size": "RAG+27B",
                 "quantization_level": "Q4_K_M"
             }
-        },
-        {
-            "name": llm_model_name,
-            "model": llm_model_name,
-            "modified_at": "2024-12-01T00:00:00.000000000Z",
-            "size": 15000000000,
-            "digest": f"sha256:{abs(hash(llm_model_name)):064x}",
-            "details": {
-                "parent_model": "",
-                "format": "gguf", 
-                "family": "gemma3",
-                "families": ["gemma3"],
-                "parameter_size": "27B",
-                "quantization_level": "Q4_K_M"
-            }
         }
     ]
     
@@ -126,7 +118,6 @@ def get_health_status() -> Dict[str, Any]:
     """헬스체크 상태 생성"""
     handler_status = "initialized" if chat_handler else "not_initialized"
     rag_model = os.environ.get("RAG_MODEL_NAME", "unknown")
-    llm_model = os.environ.get("LLM_MODEL_NAME", "unknown")
     
     return {
         "status": "healthy" if chat_handler else "degraded",
@@ -135,6 +126,7 @@ def get_health_status() -> Dict[str, Any]:
         "chat_handler": handler_status,
         "models": {
             "rag_model": rag_model,
-            "llm_model": llm_model
+            "supported_models": [rag_model],
+            "total_models": 1
         }
     }

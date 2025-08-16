@@ -75,7 +75,6 @@ async def show_model(name: str = None):
         return {"error": "model name required"}
     
     rag_model_name = os.environ["RAG_MODEL_NAME"]
-    llm_model_name = os.environ["LLM_MODEL_NAME"]
     
     if name == rag_model_name:
         # 현재 시스템 프롬프트 가져오기
@@ -83,7 +82,7 @@ async def show_model(name: str = None):
             handler = get_chat_handler()
             current_system_prompt = handler.get_system_prompt()
         except:
-            current_system_prompt = DEFAULT_SYSTEM_PROMPT
+            current_system_prompt = "You are a professional sales consultant at a Samsung store."
         
         return {
             "modelfile": f"FROM {rag_model_name}",
@@ -103,26 +102,8 @@ async def show_model(name: str = None):
                 "quantization_level": "Q4_K_M"
             }
         }
-    elif name == llm_model_name:
-        return {
-            "modelfile": f"FROM {llm_model_name}",
-            "parameters": {
-                "temperature": 0.7,
-                "top_k": 40,
-                "top_p": 0.9
-            },
-            "template": "{{ .System }}{{ .Prompt }}",
-            "details": {
-                "parent_model": "",
-                "format": "gguf",
-                "family": "gemma3",
-                "families": ["gemma3"],
-                "parameter_size": "27B",
-                "quantization_level": "Q4_K_M"
-            }
-        }
     else:
-        return {"error": f"model '{name}' not found"}
+        return {"error": f"model '{name}' not found. Only '{rag_model_name}' is available on this RAG server."}
 
 # ================================
 # 시스템 프롬프트 관리 API
@@ -211,10 +192,14 @@ async def health_check():
 @router.get("/api")
 async def api_info():
     """API 정보"""
+    rag_model_name = os.environ.get("RAG_MODEL_NAME", "rag-cheeseade:latest")
+    
     return {
-        "message": "CHEESEADE RAG Server API",
+        "message": "CHEESEADE RAG Server",
         "version": "1.0.0",
         "ollama_compatible": True,
+        "supported_model": rag_model_name,
+        "model_count": 1,
         "endpoints": [
             "/api/tags", "/api/models", "/api/ps", "/api/version",
             "/api/show", "/api/chat", "/api/generate",
