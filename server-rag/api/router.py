@@ -70,14 +70,21 @@ async def get_version():
 
 @router.get("/api/show")
 async def show_model(name: str = None):
-    """모델 상세 정보 API"""
+    """모델 상세 정보 API (기본 프롬프트 포함)"""
     if not name:
         return {"error": "model name required"}
     
-    rag_model_name = os.environ.get("RAG_MODEL_NAME", "rag-cheeseade:latest")
-    llm_model_name = os.environ.get("LLM_MODEL_NAME", "gemma3:27b-it-q4_K_M")
+    rag_model_name = os.environ["RAG_MODEL_NAME"]
+    llm_model_name = os.environ["LLM_MODEL_NAME"]
     
     if name == rag_model_name:
+        # 현재 시스템 프롬프트 가져오기
+        try:
+            handler = get_chat_handler()
+            current_system_prompt = handler.get_system_prompt()
+        except:
+            current_system_prompt = DEFAULT_SYSTEM_PROMPT
+        
         return {
             "modelfile": f"FROM {rag_model_name}",
             "parameters": {
@@ -86,6 +93,7 @@ async def show_model(name: str = None):
                 "top_p": 0.9
             },
             "template": "{{ .System }}{{ .Prompt }}",
+            "system": current_system_prompt,  # OpenWebUI에서 표시될 기본값
             "details": {
                 "parent_model": "",
                 "format": "gguf",
@@ -116,6 +124,72 @@ async def show_model(name: str = None):
     else:
         return {"error": f"model '{name}' not found"}
 
+# ================================
+# 시스템 프롬프트 관리 API
+# ================================
+
+@router.get("/api/system-prompt")
+async def get_system_prompt():
+    """현재 시스템 프롬프트 조회"""
+    try:
+        handler = get_chat_handler()
+        current_prompt = handler.get_system_prompt()
+        
+        return {
+            "status": "success",
+            "prompt": current_prompt
+        }
+    except Exception as e:
+        return {"error": f"Failed to get system prompt: {str(e)}"}
+
+@router.post("/api/system-prompt")
+async def update_system_prompt(request: dict):
+    """시스템 프롬프트 변경 (OpenWebUI 호환)"""
+    try:
+        new_prompt = request.get("prompt", "")
+        if not new_prompt:
+            return {"error": "No prompt provided"}
+        
+        handler = get_chat_handler()
+        old_prompt = handler.get_system_prompt()
+        
+        # 시스템 프롬프트 업데이트
+        success = handler.update_system_prompt(new_prompt)
+        
+        if success:
+            return {
+                "status": "success",
+                "message": "System prompt updated successfully",
+                "old_prompt": old_prompt,
+                "new_prompt": new_prompt
+            }
+        else:
+            return {"error": "Failed to update system prompt"}
+        
+    except Exception as e:
+        return {"error": f"Failed to update system prompt: {str(e)}"}
+
+@router.post("/api/system-prompt/reset")
+async def reset_system_prompt():
+    """기본 프롬프트로 리셋"""
+    try:
+        handler = get_chat_handler()
+        old_prompt = handler.get_system_prompt()
+        
+        success = handler.reset_to_default()
+        
+        if success:
+            return {
+                "status": "success",
+                "message": "System prompt reset to default",
+                "old_prompt": old_prompt,
+                "new_prompt": handler.get_system_prompt()
+            }
+        else:
+            return {"error": "Failed to reset system prompt"}
+        
+    except Exception as e:
+        return {"error": f"Failed to reset system prompt: {str(e)}"}
 
 # ================================
 # 상태 및 정보 API
@@ -144,7 +218,7 @@ async def api_info():
         "endpoints": [
             "/api/tags", "/api/models", "/api/ps", "/api/version",
             "/api/show", "/api/chat", "/api/generate",
-            "/health"
+            "/api/system-prompt", "/health"
         ]
     }
 
