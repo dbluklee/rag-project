@@ -31,7 +31,7 @@ def get_chat_handler():
     return chat_handler
 
 async def handle_chat_request(request: OllamaChatRequest):
-    """채팅 요청 처리 - RAG 모델만 지원"""
+    """채팅 요청 처리 - RAG 모델만 지원하고 로깅"""
     handler = get_chat_handler()
     
     # 사용자 메시지 추출
@@ -42,7 +42,7 @@ async def handle_chat_request(request: OllamaChatRequest):
     question = user_message.content
     
     try:
-        # RAG 모델만 지원
+        # RAG 모델인 경우만 RAG 처리 + 로깅
         if request.model == handler.rag_model_name:
             if request.stream:
                 return StreamingResponse(
@@ -50,14 +50,34 @@ async def handle_chat_request(request: OllamaChatRequest):
                     media_type="application/x-ndjson"
                 )
             else:
+                # RAG 처리 (로깅 포함)
                 response_content = await handler.process_with_rag(question)
                 return create_chat_response(request.model, response_content)
         else:
-            # RAG 모델이 아닌 경우 오류 응답
-            return create_chat_error_response(
-                request.model, 
-                f"Model '{request.model}' not supported. Only '{handler.rag_model_name}' is available on this RAG server."
-            )
+            # 일반 LLM 모델인 경우: 프록시만 하고 로깅 안함
+            print(f"🔄 일반 LLM 모델 프록시 (로깅 안함): {request.model}")
+            
+            # LLM 서버로 직접 프록시 (로깅 없음)
+            import requests
+            try:
+                response = requests.post(
+                    f"{handler.llm_server_url}/api/chat",
+                    json=request.dict(),
+                    timeout=120
+                )
+                
+                if response.status_code == 200:
+                    return response.json()
+                else:
+                    return create_chat_error_response(
+                        request.model, 
+                        f"LLM server error: {response.status_code}"
+                    )
+            except Exception as e:
+                return create_chat_error_response(
+                    request.model, 
+                    f"Proxy error: {str(e)}"
+                )
             
     except Exception as e:
         print(f"❌ 채팅 처리 오류: {str(e)}")

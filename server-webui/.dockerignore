@@ -1,7 +1,6 @@
-# CHEESEADE RAG Server .dockerignore
-
-# === 볼륨으로 연결되는 디렉토리들 ===
-volumes/
+# Open WEb UI Server .dockerignore
+config/
+data/
 
 # === Git 관련 ===
 .git/

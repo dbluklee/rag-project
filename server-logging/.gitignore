@@ -1,8 +1,5 @@
 # PostgreSQL 데이터 (중요한 사용자 데이터)
-postgres-data/
-
-# pgAdmin 데이터
-pgadmin-data/
+data/
 
 # 로그 파일
 logs/

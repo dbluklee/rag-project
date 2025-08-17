@@ -1,5 +1,6 @@
 # Open WebUI 사용자 데이터 (중요한 개인정보 포함)
 data/
+config/
 data_*
 config_*
 

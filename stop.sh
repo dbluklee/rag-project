@@ -208,6 +208,25 @@ cleanup_volumes() {
     echo ""
 }
 
+cleanup_webui_data() {
+    echo -e "${CYAN}🧹 WebUI 데이터 정리 중...${NC}"
+    
+    if [ -d "server-webui/data" ]; then
+        echo -n "  📁 data 폴더 삭제 중... "
+        rm -rf server-webui/data
+        echo -e "${GREEN}✅${NC}"
+    fi
+    
+    if [ -d "server-webui/config" ]; then
+        echo -n "  📁 config 폴더 삭제 중... "
+        rm -rf server-webui/config
+        echo -e "${GREEN}✅${NC}"
+    fi
+    
+    echo -e "${GREEN}✅ WebUI 데이터 정리 완료${NC}"
+    echo ""
+}
+
 # 서비스별 추가 정리
 cleanup_service_data() {
     local service_dir="$1"
@@ -324,6 +343,7 @@ main_stop() {
     local keep_volumes="$1"
     local keep_networks="$2"
     local clean_logs="$3"
+    local keep_webui_config="$4"
     
     echo -e "${CYAN}🚀 시스템 중지 시작...${NC}"
     echo ""
@@ -372,6 +392,11 @@ main_stop() {
         cleanup_service_data "server-llm" "logs"
         echo ""
     fi
+
+    # 메인 중지 함수 실행 후 WebUI 정리 (선택적)
+    if [ "keep_webui_config" != true ]; then
+        cleanup_webui_data
+    fi
     
     # 최종 상태 확인
     check_system_status
@@ -384,6 +409,7 @@ KEEP_VOLUMES=false
 KEEP_NETWORKS=false
 CLEAN_LOGS=false
 STATUS_ONLY=false
+KEEP_WEBUI_SETTING=false
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -415,6 +441,10 @@ while [[ $# -gt 0 ]]; do
             STATUS_ONLY=true
             shift
             ;;
+        --keep-webui-config)
+            KEEP_WEBUI_SETTING=true
+            shift
+            ;;
         *)
             echo "알 수 없는 옵션: $1"
             echo "사용법: $0 --help"
@@ -439,7 +469,7 @@ fi
 confirm_stop "$FORCE"
 
 # 메인 중지 실행
-main_stop "$KEEP_VOLUMES" "$KEEP_NETWORKS" "$CLEAN_LOGS"
+main_stop "$KEEP_VOLUMES" "$KEEP_NETWORKS" "$CLEAN_LOGS" "$KEEP_WEBUI_SETTING"
 
 # 최종 요약
 echo "🏁 중지 작업 완료 요약:"

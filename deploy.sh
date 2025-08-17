@@ -39,9 +39,11 @@ echo "📁 필요한 디렉토리 생성..."
 # 각 서버별 데이터 디렉토리 생성 (로그 등)
 mkdir -p server-rag/logs  
 mkdir -p server-llm/logs
+mkdir -p server-webui/config
+mkdir -p server-webui/data
 mkdir -p server-logging/logs
-mkdir -p server-logging/postgres-data
-mkdir -p server-logging/pgadmin-data
+mkdir -p server-logging/data
+
 
 # docs/ 폴더 내용 확인
 DOC_COUNT=$(find server-rag/docs -type f 2>/dev/null | wc -l)
@@ -73,52 +75,9 @@ initialize_webui() {
     echo "🛑 기존 WebUI 컨테이너 중지..."
     docker compose down --remove-orphans 2>/dev/null || true
     
-    # 데이터 백업 및 삭제
-    echo "📁 WebUI 데이터 초기화..."
-    if [ -d "data" ]; then
-        backup_name="data_backup_$(date +%Y%m%d_%H%M%S)"
-        mv data "$backup_name"
-        echo "   📦 기존 데이터 백업: $backup_name"
-    fi
-    
-    if [ -d "config" ]; then
-        backup_name="config_backup_$(date +%Y%m%d_%H%M%S)"
-        mv config "$backup_name"
-        echo "   📦 기존 설정 백업: $backup_name"
-    fi
-    
     # 새 디렉토리 생성
     mkdir -p data config
     echo "   ✅ 새 data, config 디렉토리 생성"
-    
-    # 최적화된 .env 파일 생성
-    echo "🔧 WebUI 환경변수 최적화..."
-    cat > .env << 'EOF'
-# UI 설정
-WEBUI_NAME=CHEESEADE AI Assistant
-
-# 인증 설정 (완전 비활성화)
-WEBUI_AUTH=false
-ENABLE_LOGIN_FORM=false
-ENABLE_API_KEY=false
-
-# Ollama API 설정
-ENABLE_OLLAMA_API=true
-
-# 기본 모델 설정
-DEFAULT_MODELS=gemma3:27b-it-q4_K_M,rag-cheeseade:latest
-
-# 성능 최적화
-ENABLE_MODEL_FILTER=true
-ENABLE_EVALUATION_ARENA_MODELS=false
-ENABLE_COMMUNITY_SHARING=false
-
-# 보안 설정
-ENABLE_SIGNUP=false
-ENABLE_LOGIN_FORM=false
-EOF
-    
-    echo "   ✅ 최적화된 .env 파일 생성"
     
     cd ..
     echo -e "${GREEN}🎉 WebUI 초기화 완료!${NC}"
@@ -586,7 +545,6 @@ if [ "$ENABLE_LOGGING" = "true" ]; then
     echo -e "${PURPLE}📊 로깅 시스템 정보:${NC}"
     echo "   • 로깅 API: http://${WEBUI_SERVER_IP}:${LOGGING_PORT}"
     echo "   • API 문서: http://${WEBUI_SERVER_IP}:${LOGGING_PORT}/docs"
-    echo "   • pgAdmin: http://${WEBUI_SERVER_IP}:8080 (선택적)"
     echo "   • 모든 RAG 질문/답변이 자동으로 기록됩니다"
     echo "   • 통계 조회: curl http://${WEBUI_SERVER_IP}:${LOGGING_PORT}/api/stats"
 fi
