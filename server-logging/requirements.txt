@@ -1,0 +1,26 @@
+# RAG 로깅 API 서버 requirements.txt
+
+# 웹 프레임워크
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+
+# 데이터베이스
+asyncpg==0.29.0
+sqlalchemy==2.0.23
+alembic==1.13.1
+
+# 데이터 검증
+pydantic==2.5.0
+
+# HTTP 클라이언트
+httpx==0.25.2
+
+# 유틸리티
+python-dateutil==2.8.2
+pytz==2023.3
+
+# 로깅
+loguru==0.7.2
+
+# 환경변수
+python-dotenv==1.0.0

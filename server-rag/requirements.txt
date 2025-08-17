@@ -7,6 +7,7 @@ pydantic                           # 데이터 검증
 
 # === HTTP 클라이언트 ===
 requests                           # HTTP 요청
+httpx                              # 비동기 HTTP 클라이언트 (로깅용)
 
 # === LangChain 생태계 ===
 langchain                          # LangChain 코어

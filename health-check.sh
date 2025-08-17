@@ -79,6 +79,22 @@ check_service() {
                         echo "    🌐 CHEESEADE WebUI 정상 로드됨"
                     fi
                     ;;
+                "Logging API")
+                    # 로깅 서버 정보 수집
+                    logging_info=$(curl -s --connect-timeout 3 "$url" 2>/dev/null)
+                    if echo "$logging_info" | grep -q "CHEESEADE RAG Logging"; then
+                        echo "    📊 로깅 API 정상 응답"
+                        
+                        # 간단한 통계 확인
+                        stats=$(curl -s --connect-timeout 3 "${url%/*}/api/stats?days=1" 2>/dev/null)
+                        if [ -n "$stats" ]; then
+                            conversations=$(echo "$stats" | grep -o '"total_conversations":[0-9]*' | cut -d':' -f2)
+                            if [ -n "$conversations" ]; then
+                                echo "    💬 오늘 대화 수: ${conversations}개"
+                            fi
+                        fi
+                    fi
+                    ;;
             esac
             
         else
@@ -112,6 +128,14 @@ check_docker_containers() {
         "cheeseade-milvus-minio:server-milvus:Milvus MinIO"
         "llm-server:server-llm:LLM Server"
     )
+    
+    # 로깅 서버 컨테이너 추가 (활성화된 경우)
+    if [ "$ENABLE_LOGGING" = "true" ]; then
+        containers+=(
+            "cheeseade-logging-db:server-logging:PostgreSQL DB"
+            "cheeseade-logging-api:server-logging:Logging API"
+        )
+    fi
     
     for container_info in "${containers[@]}"; do
         container_name="${container_info%%:*}"
@@ -156,6 +180,11 @@ check_network_connectivity() {
         "${LLM_PORT}:LLM Server"
     )
     
+    # 로깅 서버 포트 추가 (활성화된 경우)
+    if [ "$ENABLE_LOGGING" = "true" ]; then
+        ports+=("${LOGGING_PORT}:Logging API")
+    fi
+    
     echo -e "🔍 공유기 포트포워딩 확인 (${WEBUI_SERVER_IP}):"
     for port_info in "${ports[@]}"; do
         port="${port_info%%:*}"
@@ -178,6 +207,12 @@ check_network_connectivity() {
     echo -e "🔍 Docker 포트 매핑 확인:"
     # Docker 컨테이너별 포트 매핑 상태
     key_containers=("cheeseade-webui" "cheeseade-rag-server" "llm-server")
+    
+    # 로깅 서버 컨테이너 추가 (활성화된 경우)
+    if [ "$ENABLE_LOGGING" = "true" ]; then
+        key_containers+=("cheeseade-logging-api")
+    fi
+    
     for container in "${key_containers[@]}"; do
         if docker ps --format "{{.Names}}" | grep -q "^${container}$"; then
             port_mapping=$(docker port "$container" 2>/dev/null)
@@ -302,6 +337,21 @@ run_functional_tests() {
         OVERALL_STATUS=1
     fi
     SERVICES_TOTAL=$((SERVICES_TOTAL + 1))
+
+    # 로깅 기능 테스트 (활성화된 경우)
+    if [ "$ENABLE_LOGGING" = "true" ]; then
+        echo -n "📊 로깅 기능 테스트: "
+        logging_test_response=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 "http://${LOGGING_SERVER_IP}:${LOGGING_PORT}/api/stats" 2>/dev/null)
+        
+        if [ "$logging_test_response" = "200" ]; then
+            echo -e "${GREEN}✅ 정상${NC} (통계 API 응답)"
+            SERVICES_HEALTHY=$((SERVICES_HEALTHY + 1))
+        else
+            echo -e "${RED}❌ 실패${NC} (HTTP: $logging_test_response)"
+            OVERALL_STATUS=1
+        fi
+        SERVICES_TOTAL=$((SERVICES_TOTAL + 1))
+    fi
 }
 
 # 주요 서비스 상태 체크
@@ -317,6 +367,15 @@ echo "----------------------------------------"
 check_service "LLM Server" "http://${LLM_SERVER_IP}:${LLM_PORT}/api/tags" "200" "Ollama 언어모델"
 check_service "Milvus Health" "http://${MILVUS_SERVER_IP}:${MILVUS_MONITOR_PORT}/healthz" "200" "벡터 데이터베이스"
 check_service "Milvus Admin" "http://${MILVUS_SERVER_IP}:9001" "200" "Milvus 관리자 UI"
+
+# 로깅 서비스 상태 체크 (활성화된 경우)
+if [ "$ENABLE_LOGGING" = "true" ]; then
+    echo ""
+    echo -e "${PURPLE}📊 로깅 서비스 상태:${NC}"
+    echo "----------------------------------------"
+    check_service "Logging API" "http://${LOGGING_SERVER_IP}:${LOGGING_PORT}/health" "200" "로깅 API 서버"
+    check_service "PostgreSQL" "http://${LOGGING_SERVER_IP}:${LOGGING_PORT}/api/stats" "200" "데이터베이스 연결"
+fi
 
 # 상세 체크들
 check_docker_containers
@@ -337,10 +396,26 @@ if [ $OVERALL_STATUS -eq 0 ]; then
     echo "   • CHEESEADE WebUI: http://${WEBUI_SERVER_IP}:${WEBUI_PORT}"
     echo "   • RAG API 문서: http://${RAG_SERVER_IP}:${RAG_PORT}/docs"
     echo "   • Milvus Admin: http://${MILVUS_SERVER_IP}:9001"
+    
+    if [ "$ENABLE_LOGGING" = "true" ]; then
+        echo "   • 로깅 API: http://${LOGGING_SERVER_IP}:${LOGGING_PORT}"
+        echo "   • 로깅 API 문서: http://${LOGGING_SERVER_IP}:${LOGGING_PORT}/docs"
+        echo "   • pgAdmin: http://${LOGGING_SERVER_IP}:8080 (선택적)"
+    fi
+    
     echo ""
     echo -e "${BLUE}📋 사용 가능한 AI 모델:${NC}"
     echo "   • ${RAG_MODEL_NAME} (CHEESEADE RAG 전문 상담)"
     echo "   • ${LLM_MODEL_NAME} (일반 대화)"
+    
+    if [ "$ENABLE_LOGGING" = "true" ]; then
+        echo ""
+        echo -e "${PURPLE}📊 로깅 기능:${NC}"
+        echo "   • 모든 RAG 질문/답변 자동 기록"
+        echo "   • 실시간 통계 및 분석"
+        echo "   • 대화 내역 검색 가능"
+    fi
+    
     echo ""
     echo -e "${GREEN}💡 시스템이 완전히 준비되었습니다!${NC}"
 else
@@ -355,6 +430,11 @@ else
     echo "      ./stop.sh && ./deploy.sh"
     echo "   4. 네트워크 문제 시:"
     echo "      공유기 포트포워딩 설정 확인"
+    if [ "$ENABLE_LOGGING" = "true" ]; then
+        echo "   5. 로깅 서버 문제 시:"
+        echo "      docker compose -f server-logging/docker-compose.yml logs"
+        echo "      docker exec cheeseade-logging-db pg_isready -U raguser"
+    fi
 fi
 
 echo ""
@@ -362,6 +442,12 @@ echo -e "${BLUE}📋 추가 도구:${NC}"
 echo "   • 상세 로그 수집: ./monitoring/logs-collect.sh"
 echo "   • 실시간 모니터링: docker stats"
 echo "   • 서비스 재시작: ./deploy.sh"
+
+if [ "$ENABLE_LOGGING" = "true" ]; then
+    echo "   • 로깅 데이터 백업: docker exec cheeseade-logging-db pg_dump -U raguser rag_logging > backup.sql"
+    echo "   • 로깅 통계 확인: curl http://${LOGGING_SERVER_IP}:${LOGGING_PORT}/api/stats"
+fi
+
 echo ""
 
 exit $OVERALL_STATUS

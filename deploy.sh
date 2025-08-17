@@ -25,18 +25,23 @@ export WEBUI_SERVER_URL="http://${WEBUI_SERVER_IP}:${WEBUI_PORT}"
 export RAG_SERVER_URL="http://${RAG_SERVER_IP}:${RAG_PORT}"
 export MILVUS_SERVER_URL="http://${MILVUS_SERVER_IP}:${MILVUS_PORT}"
 export LLM_SERVER_URL="http://${LLM_SERVER_IP}:${LLM_PORT}"
+export LOGGING_SERVER_URL="http://${LOGGING_SERVER_IP}:${LOGGING_PORT}"
 
 echo "✅ 서버 URL 설정:"
 echo "   WebUI: $WEBUI_SERVER_URL"
 echo "   RAG: $RAG_SERVER_URL" 
 echo "   LLM: $LLM_SERVER_URL"
 echo "   Milvus: $MILVUS_SERVER_URL"
+echo "   Logging: $LOGGING_SERVER_URL"
 
 echo "📁 필요한 디렉토리 생성..."
 
 # 각 서버별 데이터 디렉토리 생성 (로그 등)
 mkdir -p server-rag/logs  
 mkdir -p server-llm/logs
+mkdir -p server-logging/logs
+mkdir -p server-logging/postgres-data
+mkdir -p server-logging/pgadmin-data
 
 # docs/ 폴더 내용 확인
 DOC_COUNT=$(find server-rag/docs -type f 2>/dev/null | wc -l)
@@ -228,6 +233,50 @@ check_llm_health() {
     return 1
 }
 
+check_logging_health() {
+    local max_attempts=30  # 2.5분 대기
+    local attempt=1
+    
+    echo -e "${CYAN}⏳ 로깅 서버 헬스체크 대기 중...${NC}"
+    
+    while [ $attempt -le $max_attempts ]; do
+        echo -n "   시도 $attempt/$max_attempts: "
+        
+        # API 서버 헬스체크
+        if curl -s --connect-timeout 5 "${LOGGING_SERVER_URL}/health" >/dev/null 2>&1; then
+            echo -e "${GREEN}✅ 로깅 서버 준비 완료!${NC}"
+            
+            # 추가 정보 수집
+            logging_info=$(curl -s --connect-timeout 3 "${LOGGING_SERVER_URL}/health" 2>/dev/null)
+            if echo "$logging_info" | grep -q "sqlite"; then
+                echo -e "   🗄️ SQLite 데이터베이스 연결됨"
+                
+                # 대화 수 확인
+                total_conversations=$(echo "$logging_info" | grep -o '"total_conversations":[0-9]*' | cut -d':' -f2)
+                if [ -n "$total_conversations" ]; then
+                    echo -e "   💬 저장된 대화: ${total_conversations}개"
+                fi
+                
+                # DB 파일 크기 확인
+                db_size=$(echo "$logging_info" | grep -o '"database_size_mb":[0-9.]*' | cut -d':' -f2)
+                if [ -n "$db_size" ]; then
+                    echo -e "   📊 DB 크기: ${db_size}MB"
+                fi
+            fi
+            
+            return 0
+        else
+            echo -e "${YELLOW}API 서버 초기화 대기 중...${NC}"
+        fi
+        
+        sleep 5
+        attempt=$((attempt + 1))
+    done
+    
+    echo -e "${RED}❌ 로깅 서버 헬스체크 실패 (타임아웃)${NC}"
+    return 1
+}
+
 check_rag_health() {
     local max_attempts=180  # 15분 대기 (자동 모델 다운로드 고려)
     local attempt=1
@@ -270,26 +319,20 @@ check_rag_health() {
                 fi
             fi
             
-            # 로컬 Docker 포트 확인 (정보용, 실패해도 성공으로 처리)
-            local_port_check=$(docker port cheeseade-rag-server 8000 2>/dev/null | head -1)
-            if [ -n "$local_port_check" ]; then
-                echo -e "   🔌 Docker 포트 매핑: $local_port_check"
+            # 로깅 연결 테스트
+            if [ "$ENABLE_LOGGING" = "true" ]; then
+                echo -e "   📝 로깅 서버 연결 테스트 중..."
+                if curl -s --connect-timeout 3 "${LOGGING_SERVER_URL}/health" >/dev/null 2>&1; then
+                    echo -e "   ✅ 로깅 서버 연결됨"
+                else
+                    echo -e "   ⚠️ 로깅 서버 연결 실패 (RAG는 정상 작동)"
+                fi
             fi
             
-            # 공유기 포트포워딩 확인 (정보용)
-            echo -e "   🌐 공유기 포트포워딩: ${RAG_SERVER_URL} → 서버PC:8000"
-            
             return 0
         fi
         
-        # 3. 모델 API 확인 (헬스체크 실패시 대안)
-        models_response=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 "${RAG_SERVER_URL}/api/tags" 2>/dev/null)
-        if [ "$models_response" = "200" ]; then
-            echo -e "${GREEN}✅ RAG 서버 준비 완료! (모델 API 응답)${NC}"
-            return 0
-        fi
-        
-        # 4. 상세한 디버그 정보 (5번마다)
+        # 3. 상세한 디버그 정보 (5번마다)
         if [ $((attempt % 5)) -eq 0 ]; then
             echo -e "${YELLOW}상세 디버그 정보:${NC}"
             
@@ -365,6 +408,7 @@ cleanup_on_failure() {
             docker compose -f server-rag/docker-compose.yml down --remove-orphans 2>/dev/null || true
             docker compose -f server-llm/docker-compose.yml down --remove-orphans 2>/dev/null || true
             docker compose -f server-milvus/docker-compose.yml down --remove-orphans 2>/dev/null || true
+            docker compose -f server-logging/docker-compose.yml down --remove-orphans 2>/dev/null || true
         }
         
         echo -e "${GREEN}   ✅ 시스템 정리 완료${NC}"
@@ -452,6 +496,7 @@ docker compose -f server-webui/docker-compose.yml down --remove-orphans 2>/dev/n
 docker compose -f server-rag/docker-compose.yml down --remove-orphans 2>/dev/null || true
 docker compose -f server-llm/docker-compose.yml down --remove-orphans 2>/dev/null || true
 docker compose -f server-milvus/docker-compose.yml down --remove-orphans 2>/dev/null || true
+docker compose -f server-logging/docker-compose.yml down --remove-orphans 2>/dev/null || true
 
 echo -e "${GREEN}✅ 정리 완료${NC}"
 
@@ -465,7 +510,7 @@ trap 'cleanup_on_failure' ERR  # 에러 발생 시 정리 함수 호출
 # 의존성 순서에 따른 서비스 시작
 echo ""
 echo -e "${CYAN}🎯 의존성 순서에 따른 서비스 시작${NC}"
-echo -e "   순서: Milvus → LLM → RAG → WebUI"
+echo -e "   순서: Milvus → LLM → Logging → RAG → WebUI"
 
 # 1. Milvus Server (가장 기본이 되는 데이터베이스)
 start_service "server-milvus" "Milvus Server" "벡터 데이터베이스" "check_milvus_health"
@@ -473,10 +518,17 @@ start_service "server-milvus" "Milvus Server" "벡터 데이터베이스" "check
 # 2. LLM Server (RAG가 의존하는 언어 모델)
 start_service "server-llm" "LLM Server" "언어 모델 서버" "check_llm_health"
 
-# 3. RAG Server (Milvus와 LLM에 의존)
+# 3. Logging Server (RAG 로깅용 - 선택적)
+if [ "$ENABLE_LOGGING" = "true" ]; then
+    start_service "server-logging" "Logging Server" "RAG 질문/답변 로깅" "check_logging_health"
+else
+    echo -e "${YELLOW}⚠️ 로깅 서버 비활성화됨 (ENABLE_LOGGING=false)${NC}"
+fi
+
+# 4. RAG Server (Milvus, LLM, 로깅에 의존)
 start_service "server-rag" "RAG Server" "API 및 검색 서버" "check_rag_health"
 
-# 4. WebUI Server (모든 백엔드 서비스에 의존) - 초기화됨
+# 5. WebUI Server (모든 백엔드 서비스에 의존) - 초기화됨
 start_service "server-webui" "WebUI Server" "사용자 인터페이스 (초기화됨)" "check_webui_health"
 
 # 에러 핸들러 해제 (정상 완료)
@@ -495,9 +547,14 @@ if [ -n "$running_containers" ]; then
     
     # 컨테이너 개수 확인
     container_count=$(echo "$running_containers" | wc -l)
-    echo -e "\n📊 총 실행 중인 컨테이너: ${container_count}개"
+    expected_count=7  # 로깅 서버 포함
+    if [ "$ENABLE_LOGGING" != "true" ]; then
+        expected_count=5  # 로깅 서버 제외
+    fi
     
-    if [ "$container_count" -ge 6 ]; then  # 예상 컨테이너 수
+    echo -e "\n📊 총 실행 중인 컨테이너: ${container_count}개 (예상: ${expected_count}개)"
+    
+    if [ "$container_count" -ge "$expected_count" ]; then
         echo -e "${GREEN}✅ 모든 컨테이너가 정상 실행 중${NC}"
     else
         echo -e "${YELLOW}⚠️ 일부 컨테이너가 누락될 수 있습니다${NC}"
@@ -523,6 +580,17 @@ echo "      • RAG Server: http://${WEBUI_SERVER_IP}:${RAG_PORT}"
 echo "   4. 🤖 사용 가능한 모델:"
 echo "      • ${RAG_MODEL_NAME} (CHEESEADE RAG를 활용한 전문 상담)"
 echo "      • ${LLM_MODEL_NAME} (일반 대화)"
+
+if [ "$ENABLE_LOGGING" = "true" ]; then
+    echo ""
+    echo -e "${PURPLE}📊 로깅 시스템 정보:${NC}"
+    echo "   • 로깅 API: http://${WEBUI_SERVER_IP}:${LOGGING_PORT}"
+    echo "   • API 문서: http://${WEBUI_SERVER_IP}:${LOGGING_PORT}/docs"
+    echo "   • pgAdmin: http://${WEBUI_SERVER_IP}:8080 (선택적)"
+    echo "   • 모든 RAG 질문/답변이 자동으로 기록됩니다"
+    echo "   • 통계 조회: curl http://${WEBUI_SERVER_IP}:${LOGGING_PORT}/api/stats"
+fi
+
 echo ""
 echo -e "${PURPLE}🧹 WebUI 초기화 완료:${NC}"
 echo "   • 이전 채팅 기록 완전 삭제됨"
@@ -534,6 +602,12 @@ echo -e "${BLUE}🔧 문제 발생 시:${NC}"
 echo "   • 로그 수집: ./monitoring/logs-collect.sh"
 echo "   • 시스템 재시작: ./stop.sh && ./deploy.sh"
 echo "   • 브라우저 캐시 삭제 또는 시크릿 모드 사용"
+
+if [ "$ENABLE_LOGGING" = "true" ]; then
+    echo "   • 로깅 서버 로그: docker compose -f server-logging/docker-compose.yml logs"
+    echo "   • 데이터베이스 백업: docker exec cheeseade-logging-db pg_dump -U raguser rag_logging > backup.sql"
+fi
+
 echo ""
 echo -e "${GREEN}✨ 배포가 성공적으로 완료되었습니다!${NC}"
 echo -e "${YELLOW}💡 첫 접속 시 반드시 시크릿 모드를 사용하세요!${NC}"

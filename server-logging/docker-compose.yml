@@ -1,0 +1,23 @@
+services:
+  logging-api:
+    build: .
+    container_name: cheeseade-logging-api
+    environment:
+      - API_PORT=7000
+      - LOG_LEVEL=INFO
+    ports:
+      - "7000:7000"
+    volumes:
+      # 호스트 폴더를 컨테이너에 마운트
+      - ./logs:/app/logs
+      - ./data:/app/data  # 추가 데이터 저장용
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  logging-net:
+    driver: bridge
