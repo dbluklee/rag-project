@@ -1,5 +1,7 @@
+# server-logging/main.py - CORS 문제 해결 버전
+
 """
-CHEESEADE RAG 로깅 API 서버 (SQLite 버전)
+CHEESEADE RAG 로깅 API 서버 (SQLite 버전) - CORS 문제 해결
 """
 import os
 import uuid
@@ -17,7 +19,7 @@ from pydantic import BaseModel
 from loguru import logger
 
 # ================================
-# 데이터 모델
+# 데이터 모델 (기존과 동일)
 # ================================
 
 class RAGContext(BaseModel):
@@ -50,7 +52,7 @@ class ConversationResponse(BaseModel):
     created_at: str
 
 # ================================
-# SQLite 데이터베이스 관리자
+# SQLite 데이터베이스 관리자 (기존과 동일)
 # ================================
 
 class SQLiteManager:
@@ -321,7 +323,7 @@ class SQLiteManager:
                 ]
 
 # ================================
-# FastAPI 앱 설정
+# FastAPI 앱 설정 - CORS 문제 해결
 # ================================
 
 # SQLite 관리자 초기화
@@ -343,16 +345,19 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# CORS 미들웨어 설정 - 더 명확하고 관대한 설정
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["GET", "POST"],
-    allow_headers=["*"],
+    allow_origins=["*"],  # 모든 도메인 허용 (개발용)
+    allow_credentials=False,  # 쿠키 불필요하므로 False
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["*"],  # 모든 헤더 허용
+    expose_headers=["*"],  # 모든 응답 헤더 노출
+    max_age=3600  # preflight 요청 캐시 시간
 )
 
 # ================================
-# API 엔드포인트
+# API 엔드포인트 - 응답 헤더 강화
 # ================================
 
 @app.get("/health")
@@ -369,16 +374,20 @@ async def health_check():
         total_conversations = 0
         db_status = f"error: {str(e)}"
     
-    return {
+    response_data = {
         "status": "healthy",
         "service": "rag-logging-api",
         "storage": "sqlite",
         "database_file": str(db_manager.db_path),
         "database_size_bytes": db_size,
+        "database_size_mb": round(db_size / 1024 / 1024, 2),
         "total_conversations": total_conversations,
         "database_status": db_status,
+        "cors_enabled": True,
         "timestamp": datetime.now(timezone.utc).isoformat()
     }
+    
+    return response_data
 
 @app.post("/api/log")
 async def log_rag_conversation(log_data: RAGLogRequest):
@@ -400,6 +409,7 @@ async def log_rag_conversation(log_data: RAGLogRequest):
 async def get_conversations(limit: int = 100, session_id: Optional[str] = None):
     try:
         conversations = await db_manager.get_conversations(limit=limit, session_id=session_id)
+        logger.info(f"📋 대화 목록 조회: {len(conversations)}개")
         return conversations
     except Exception as e:
         logger.error(f"대화 기록 조회 실패: {e}")
@@ -424,6 +434,7 @@ async def get_conversation_detail(conversation_id: str):
 async def get_statistics(days: int = 7):
     try:
         stats = await db_manager.get_stats(days=days)
+        logger.info(f"📊 통계 조회 완료: {stats.get('total_conversations', 0)}개 대화")
         return stats
     except Exception as e:
         logger.error(f"통계 조회 실패: {e}")
@@ -433,10 +444,16 @@ async def get_statistics(days: int = 7):
 async def search_conversations(q: str, limit: int = 50):
     try:
         results = await db_manager.search_conversations(q, limit)
+        logger.info(f"🔍 검색 완료: '{q}' - {len(results)}개 결과")
         return results
     except Exception as e:
         logger.error(f"검색 실패: {e}")
         raise HTTPException(status_code=500, detail=f"검색 실패: {str(e)}")
+
+# OPTIONS 메서드 명시적 처리 (필요한 경우)
+@app.options("/api/{path:path}")
+async def options_handler():
+    return {"message": "CORS preflight OK"}
 
 @app.get("/")
 async def root():
@@ -452,21 +469,29 @@ async def root():
             "database_file": str(db_manager.db_path),
             "database_size_bytes": db_size,
             "database_size_mb": round(db_size / 1024 / 1024, 2),
+            "cors_enabled": True,
             "endpoints": ["/api/log", "/api/conversations", "/api/stats", "/api/search", "/health"],
             "features": [
                 "SQLite 데이터베이스",
                 "호스트 볼륨 저장",
                 "SQL 쿼리 지원",
                 "관계형 데이터 구조",
-                "트랜잭션 안전성"
+                "트랜잭션 안전성",
+                "CORS 지원"
             ],
-            "current_stats": stats
+            "current_stats": stats,
+            "access_info": {
+                "dashboard_url": "대시보드에서 접근 가능",
+                "api_base": "/api",
+                "cors_policy": "모든 도메인 허용"
+            }
         }
     except Exception as e:
         return {
             "service": "CHEESEADE RAG Logging API",
             "version": "1.0.0",
             "status": "running",
+            "cors_enabled": True,
             "error": str(e)
         }
 

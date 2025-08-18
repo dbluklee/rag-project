@@ -1,0 +1,1014 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CHEESEADE RAG 로그 대시보드</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+            position: relative;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+            margin-bottom: 20px;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.2);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            backdrop-filter: blur(10px);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 8px;
+            animation: pulse 2s infinite;
+        }
+
+        .status-online { background-color: #00ff88; }
+        .status-offline { background-color: #ff4757; }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .main-content {
+            padding: 30px;
+        }
+
+        .stats-section {
+            margin-bottom: 40px;
+        }
+
+        .section-title {
+            font-size: 1.5em;
+            margin-bottom: 20px;
+            color: #2c3e50;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 25px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+            border: 1px solid rgba(102, 126, 234, 0.1);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.15);
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+        }
+
+        .stat-number {
+            font-size: 2.5em;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 5px;
+            line-height: 1;
+        }
+
+        .stat-label {
+            color: #6c757d;
+            font-size: 1em;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 10px;
+        }
+
+        .stat-change {
+            font-size: 0.85em;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-weight: 500;
+        }
+
+        .stat-increase {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .stat-decrease {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .controls-section {
+            background: #f8f9fa;
+            padding: 25px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+            border: 1px solid #e9ecef;
+        }
+
+        .controls-grid {
+            display: grid;
+            grid-template-columns: 1fr auto auto;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .search-container {
+            position: relative;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 12px 45px 12px 15px;
+            border: 2px solid #e9ecef;
+            border-radius: 25px;
+            font-size: 1em;
+            transition: all 0.3s ease;
+            background: white;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .search-icon {
+            position: absolute;
+            right: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #6c757d;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 25px;
+            font-size: 1em;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+            transform: translateY(-2px);
+        }
+
+        .conversations-section {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .conversations-header {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            padding: 20px 25px;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .conversations-body {
+            max-height: 800px;
+            overflow-y: auto;
+        }
+
+        .conversation-item {
+            padding: 25px;
+            border-bottom: 1px solid #f1f3f4;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .conversation-item:hover {
+            background: #f8f9fa;
+        }
+
+        .conversation-item:last-child {
+            border-bottom: none;
+        }
+
+        .conversation-header {
+            display: flex;
+            justify-content: between;
+            align-items: flex-start;
+            margin-bottom: 15px;
+            gap: 15px;
+        }
+
+        .conversation-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            font-size: 0.85em;
+            color: #6c757d;
+            margin-top: 10px;
+        }
+
+        .meta-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            background: #f8f9fa;
+            padding: 4px 8px;
+            border-radius: 8px;
+        }
+
+        .question {
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 12px;
+            line-height: 1.4;
+            flex: 1;
+        }
+
+        .answer {
+            color: #495057;
+            line-height: 1.6;
+            margin-bottom: 15px;
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            border-left: 4px solid #667eea;
+        }
+
+        .session-badge {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            font-weight: 500;
+            white-space: nowrap;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 60px 20px;
+            color: #6c757d;
+        }
+
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error {
+            background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
+            color: #721c24;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            border: 1px solid #f5c6cb;
+        }
+
+        .error-title {
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .no-data {
+            text-align: center;
+            padding: 60px 20px;
+            color: #6c757d;
+        }
+
+        .no-data-icon {
+            font-size: 4em;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+
+        .filter-chips {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }
+
+        .filter-chip {
+            background: #e9ecef;
+            color: #495057;
+            padding: 6px 12px;
+            border-radius: 15px;
+            font-size: 0.85em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .filter-chip:hover {
+            background: #667eea;
+            color: white;
+        }
+
+        .filter-chip.active {
+            background: #667eea;
+            color: white;
+        }
+
+        .debug-panel {
+            background: #e3f2fd;
+            border: 1px solid #bbdefb;
+            border-radius: 10px;
+            padding: 15px;
+            margin: 20px 0;
+            font-size: 0.9em;
+            display: none;
+        }
+
+        .debug-panel.show {
+            display: block;
+        }
+
+        .debug-output {
+            background: #263238;
+            color: #4fc3f7;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.8em;
+            max-height: 200px;
+            overflow-y: auto;
+            margin-top: 10px;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                margin: 10px;
+                border-radius: 15px;
+            }
+
+            .header {
+                padding: 20px;
+            }
+
+            .header h1 {
+                font-size: 2em;
+            }
+
+            .main-content {
+                padding: 20px;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .controls-grid {
+                grid-template-columns: 1fr;
+                gap: 10px;
+            }
+
+            .conversation-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .conversation-meta {
+                flex-direction: column;
+                gap: 8px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 CHEESEADE RAG 대시보드</h1>
+            <p>실시간 AI 대화 로그 모니터링 시스템</p>
+            <div class="status-badge">
+                <div class="status-dot" id="statusDot"></div>
+                <span id="connectionStatus">연결 확인 중...</span>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <!-- 통계 섹션 -->
+            <div class="stats-section">
+                <h2 class="section-title">📊 실시간 통계</h2>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-number" id="totalConversations">-</div>
+                        <div class="stat-label">총 대화 수</div>
+                        <div class="stat-change stat-increase" id="conversationsChange" style="display: none;">
+                            +5 (오늘)
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="uniqueSessions">-</div>
+                        <div class="stat-label">고유 사용자</div>
+                        <div class="stat-change stat-increase" id="sessionsChange" style="display: none;">
+                            +2 (오늘)
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="avgResponseTime">-</div>
+                        <div class="stat-label">평균 응답시간 (ms)</div>
+                        <div class="stat-change stat-decrease" id="responseTimeChange" style="display: none;">
+                            -200ms (개선)
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="popularModel">-</div>
+                        <div class="stat-label">주요 AI 모델</div>
+                        <div class="stat-change stat-increase" id="modelChange" style="display: none;">
+                            RAG 모델 활성
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 컨트롤 섹션 -->
+            <div class="controls-section">
+                <div class="controls-grid">
+                    <div class="search-container">
+                        <input type="text" id="searchInput" class="search-input" placeholder="질문 내용이나 답변으로 검색...">
+                        <div class="search-icon">🔍</div>
+                    </div>
+                    <button class="btn btn-primary" onclick="searchConversations()">
+                        검색
+                    </button>
+                    <button class="btn btn-secondary" onclick="loadData()">
+                        🔄 새로고침
+                    </button>
+                </div>
+                
+                <div class="filter-chips">
+                    <div class="filter-chip active" onclick="filterByPeriod('all')">전체</div>
+                    <div class="filter-chip" onclick="filterByPeriod('today')">오늘</div>
+                    <div class="filter-chip" onclick="filterByPeriod('week')">이번 주</div>
+                    <div class="filter-chip" onclick="filterByModel('rag')">RAG 모델</div>
+                    <div class="filter-chip" onclick="toggleDebug()">🔧 디버그</div>
+                </div>
+            </div>
+
+            <!-- 디버그 패널 -->
+            <div class="debug-panel" id="debugPanel">
+                <h4>🔧 디버그 정보</h4>
+                <button class="btn btn-secondary btn-small" onclick="testConnection()">연결 테스트</button>
+                <button class="btn btn-secondary btn-small" onclick="clearDebugLog()">로그 지우기</button>
+                <div class="debug-output" id="debugOutput"></div>
+            </div>
+
+            <!-- 대화 목록 섹션 -->
+            <div class="conversations-section">
+                <div class="conversations-header">
+                    <h2 class="section-title">💬 최근 대화 기록</h2>
+                </div>
+                <div class="conversations-body">
+                    <div id="conversationsList">
+                        <div class="loading">
+                            <div class="loading-spinner"></div>
+                            시스템 연결 및 데이터 로딩 중...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 설정
+        const API_BASE = 'http://112.148.37.41:1889/api';
+        let isOnline = false;
+        let currentFilter = 'all';
+        let allConversations = [];
+
+        // 디버그 로깅
+        function debugLog(message, data = null) {
+            const timestamp = new Date().toLocaleTimeString();
+            const debugOutput = document.getElementById('debugOutput');
+            
+            console.log(`[${timestamp}] ${message}`, data || '');
+            
+            if (debugOutput) {
+                const logEntry = document.createElement('div');
+                logEntry.innerHTML = `<span style="color: #81c784;">[${timestamp}]</span> ${message}`;
+                if (data) {
+                    logEntry.innerHTML += `<br><span style="color: #ffb74d;">${JSON.stringify(data, null, 2)}</span>`;
+                }
+                debugOutput.appendChild(logEntry);
+                debugOutput.scrollTop = debugOutput.scrollHeight;
+            }
+        }
+
+        // 연결 상태 업데이트
+        function updateConnectionStatus(online, message = '') {
+            isOnline = online;
+            const statusDot = document.getElementById('statusDot');
+            const statusText = document.getElementById('connectionStatus');
+            
+            if (online) {
+                statusDot.className = 'status-dot status-online';
+                statusText.textContent = '🟢 시스템 정상 운영';
+            } else {
+                statusDot.className = 'status-dot status-offline';
+                statusText.textContent = `🔴 연결 오류 ${message}`;
+            }
+        }
+
+        // API 연결 테스트
+        async function testConnection() {
+            debugLog('🔗 시스템 연결 테스트 시작...');
+            
+            try {
+                const response = await fetch(`${API_BASE}/../health`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    debugLog('✅ 연결 테스트 성공', data);
+                    updateConnectionStatus(true);
+                    return true;
+                } else {
+                    debugLog('❌ 연결 테스트 실패', { status: response.status });
+                    updateConnectionStatus(false, `(HTTP ${response.status})`);
+                    return false;
+                }
+            } catch (error) {
+                debugLog('💥 연결 오류', error.message);
+                updateConnectionStatus(false, '(네트워크 오류)');
+                return false;
+            }
+        }
+
+        // 통계 데이터 로드
+        async function loadStats() {
+            try {
+                debugLog('📊 통계 데이터 로딩...');
+                const response = await fetch(`${API_BASE}/stats`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                const stats = await response.json();
+                debugLog('📈 통계 데이터 수신', stats);
+                
+                // 통계 표시
+                document.getElementById('totalConversations').textContent = stats.total_conversations || 0;
+                document.getElementById('uniqueSessions').textContent = stats.unique_sessions || 0;
+                document.getElementById('avgResponseTime').textContent = Math.round(stats.avg_response_time || 0);
+                
+                const popularModel = stats.popular_models?.[0]?.model || 'N/A';
+                document.getElementById('popularModel').textContent = 
+                    popularModel.includes('rag') ? 'RAG 모델' : popularModel.split(':')[0];
+                
+                updateConnectionStatus(true);
+                
+            } catch (error) {
+                debugLog('❌ 통계 로딩 실패', error.message);
+                updateConnectionStatus(false, '(통계 API 오류)');
+                
+                // 오류 시 기본값 표시
+                ['totalConversations', 'uniqueSessions', 'avgResponseTime', 'popularModel'].forEach(id => {
+                    document.getElementById(id).textContent = '오류';
+                });
+            }
+        }
+
+        // 대화 목록 로드
+        async function loadConversations(query = '') {
+            const listContainer = document.getElementById('conversationsList');
+            
+            listContainer.innerHTML = `
+                <div class="loading">
+                    <div class="loading-spinner"></div>
+                    ${query ? '검색 중...' : '대화 기록 로딩 중...'}
+                </div>
+            `;
+            
+            try {
+                debugLog(`💬 대화 목록 로딩... ${query ? `검색어: "${query}"` : '전체 목록'}`);
+                
+                const url = query ? 
+                    `${API_BASE}/search?q=${encodeURIComponent(query)}&limit=50` :
+                    `${API_BASE}/conversations?limit=50`;
+                
+                const response = await fetch(url);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                const conversations = await response.json();
+                allConversations = conversations;
+                
+                debugLog(`📝 대화 데이터 수신: ${conversations.length}개`, conversations.slice(0, 2));
+                
+                displayConversations(conversations);
+                updateConnectionStatus(true);
+                
+            } catch (error) {
+                debugLog('💥 대화 로딩 실패', error.message);
+                updateConnectionStatus(false, '(대화 API 오류)');
+                
+                listContainer.innerHTML = `
+                    <div class="error">
+                        <div class="error-title">❌ 데이터 로딩 실패</div>
+                        <p>오류: ${error.message}</p>
+                        <p>가능한 원인:</p>
+                        <ul>
+                            <li>로깅 서버 연결 문제</li>
+                            <li>네트워크 오류</li>
+                            <li>CORS 설정 문제</li>
+                        </ul>
+                        <button class="btn btn-primary" onclick="loadData()" style="margin-top: 10px;">
+                            🔄 다시 시도
+                        </button>
+                    </div>
+                `;
+            }
+        }
+
+        // 대화 목록 표시
+        function displayConversations(conversations) {
+            const listContainer = document.getElementById('conversationsList');
+            
+            if (!conversations || conversations.length === 0) {
+                listContainer.innerHTML = `
+                    <div class="no-data">
+                        <div class="no-data-icon">📭</div>
+                        <h3>아직 대화 기록이 없습니다</h3>
+                        <p>RAG 시스템을 사용해서 AI와 대화를 나눠보세요!</p>
+                        <button class="btn btn-primary" onclick="loadData()" style="margin-top: 15px;">
+                            🔄 새로고침
+                        </button>
+                    </div>
+                `;
+                return;
+            }
+            
+            const conversationsHtml = conversations.map((conv, index) => {
+                const question = conv.user_question || '질문 정보 없음';
+                const answer = conv.rag_response || '응답 정보 없음';
+                const responseTime = conv.response_time_ms || 0;
+                const model = conv.model_used || '모델 정보 없음';
+                const sessionId = conv.session_id || '세션 정보 없음';
+                const createdAt = conv.created_at || new Date().toISOString();
+                const contextsCount = conv.contexts_count || 0;
+                
+                // 시간 포맷팅
+                const timeAgo = getTimeAgo(createdAt);
+                const fullTime = new Date(createdAt).toLocaleString('ko-KR');
+                
+                // 응답 시간 색상
+                const responseTimeClass = responseTime < 3000 ? 'stat-increase' : 
+                                        responseTime < 10000 ? 'stat-change' : 'stat-decrease';
+                
+                return `
+                    <div class="conversation-item">
+                        <div class="conversation-header">
+                            <div class="question">
+                                ❓ ${highlightSearchTerm(question)}
+                            </div>
+                            <div class="session-badge">
+                                ${sessionId.substring(0, 12)}...
+                            </div>
+                        </div>
+                        
+                        <div class="answer">
+                            🤖 ${highlightSearchTerm(answer.substring(0, 300))}${answer.length > 300 ? '...' : ''}
+                        </div>
+                        
+                        <div class="conversation-meta">
+                            <div class="meta-item">
+                                📅 <span title="${fullTime}">${timeAgo}</span>
+                            </div>
+                            <div class="meta-item">
+                                ⚡ <span class="${responseTimeClass}">${responseTime}ms</span>
+                            </div>
+                            <div class="meta-item">
+                                🎯 ${model.includes('rag') ? 'RAG 모델' : model}
+                            </div>
+                            <div class="meta-item">
+                                📄 ${contextsCount}개 문서 참조
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            listContainer.innerHTML = conversationsHtml;
+        }
+
+        // 검색어 하이라이트
+        function highlightSearchTerm(text) {
+            const searchTerm = document.getElementById('searchInput').value.trim();
+            if (!searchTerm) return text;
+            
+            const regex = new RegExp(`(${searchTerm})`, 'gi');
+            return text.replace(regex, '<mark style="background: #ffeb3b; padding: 2px 4px; border-radius: 3px;">$1</mark>');
+        }
+
+        // 시간 경과 표시
+        function getTimeAgo(dateString) {
+            const now = new Date();
+            const past = new Date(dateString);
+            const diffInSeconds = Math.floor((now - past) / 1000);
+            
+            if (diffInSeconds < 60) return '방금 전';
+            if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}분 전`;
+            if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}시간 전`;
+            if (diffInSeconds < 2592000) return `${Math.floor(diffInSeconds / 86400)}일 전`;
+            return `${Math.floor(diffInSeconds / 2592000)}개월 전`;
+        }
+
+        // 검색 실행
+        function searchConversations() {
+            const query = document.getElementById('searchInput').value.trim();
+            debugLog(`🔍 검색 실행: "${query}"`);
+            loadConversations(query);
+            updateFilterChips('search');
+        }
+
+        // 기간별 필터링
+        function filterByPeriod(period) {
+            currentFilter = period;
+            debugLog(`📅 기간 필터 적용: ${period}`);
+            
+            // 실제 구현에서는 API에 날짜 파라미터 추가
+            loadConversations();
+            updateFilterChips(period);
+        }
+
+        // 모델별 필터링
+        function filterByModel(model) {
+            debugLog(`🎯 모델 필터 적용: ${model}`);
+            
+            if (model === 'rag') {
+                const ragConversations = allConversations.filter(conv => 
+                    conv.model_used && conv.model_used.includes('rag')
+                );
+                displayConversations(ragConversations);
+            }
+            updateFilterChips(model);
+        }
+
+        // 필터 칩 업데이트
+        function updateFilterChips(activeFilter) {
+            document.querySelectorAll('.filter-chip').forEach(chip => {
+                chip.classList.remove('active');
+            });
+            
+            const activeChip = [...document.querySelectorAll('.filter-chip')]
+                .find(chip => chip.textContent.includes(activeFilter) || 
+                            chip.onclick.toString().includes(activeFilter));
+            
+            if (activeChip) activeChip.classList.add('active');
+        }
+
+        // 디버그 패널 토글
+        function toggleDebug() {
+            const panel = document.getElementById('debugPanel');
+            panel.classList.toggle('show');
+            
+            if (panel.classList.contains('show')) {
+                debugLog('🔧 디버그 모드 활성화');
+            }
+        }
+
+        // 디버그 로그 지우기
+        function clearDebugLog() {
+            const debugOutput = document.getElementById('debugOutput');
+            debugOutput.innerHTML = '';
+            debugLog('🧹 디버그 로그 지워짐');
+        }
+
+        // 전체 데이터 로드
+        function loadData() {
+            debugLog('🚀 전체 시스템 데이터 새로고침 시작');
+            loadStats();
+            loadConversations();
+        }
+
+        // 엔터키 검색
+        document.getElementById('searchInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                searchConversations();
+            }
+        });
+
+        // 검색 입력 실시간 처리
+        let searchTimeout;
+        document.getElementById('searchInput').addEventListener('input', function(e) {
+            clearTimeout(searchTimeout);
+            const query = e.target.value.trim();
+            
+            if (query.length === 0) {
+                searchTimeout = setTimeout(() => {
+                    loadConversations();
+                }, 300);
+            }
+        });
+
+        // 페이지 로드 시 초기화
+        document.addEventListener('DOMContentLoaded', function() {
+            debugLog('🌟 CHEESEADE RAG 대시보드 초기화 시작');
+            
+            // 연결 테스트 후 데이터 로드
+            testConnection().then(isConnected => {
+                if (isConnected) {
+                    loadData();
+                } else {
+                    debugLog('⚠️ 초기 연결 실패, 5초 후 재시도...');
+                    setTimeout(() => {
+                        testConnection().then(retry => {
+                            if (retry) loadData();
+                        });
+                    }, 5000);
+                }
+            });
+        });
+
+        // 자동 새로고침 (30초마다)
+        setInterval(() => {
+            if (isOnline && document.visibilityState === 'visible') {
+                debugLog('🔄 자동 새로고침 (30초 주기)');
+                loadStats(); // 통계만 자동 새로고침 (대화 목록은 사용자가 수동으로)
+            }
+        }, 30000);
+
+        // 페이지 가시성 변경 시 처리
+        document.addEventListener('visibilitychange', function() {
+            if (document.visibilityState === 'visible' && isOnline) {
+                debugLog('👁️ 페이지 다시 활성화됨, 데이터 새로고침');
+                loadStats();
+            }
+        });
+
+        // 윈도우 포커스 시 새로고침
+        window.addEventListener('focus', function() {
+            if (isOnline) {
+                debugLog('🎯 윈도우 포커스됨, 최신 데이터 확인');
+                loadStats();
+            }
+        });
+
+        // 오류 처리
+        window.addEventListener('error', function(e) {
+            debugLog('💥 JavaScript 오류 발생', {
+                message: e.message,
+                filename: e.filename,
+                lineno: e.lineno
+            });
+        });
+
+        // 네트워크 상태 감지 (지원되는 브라우저에서)
+        if ('navigator' in window && 'onLine' in navigator) {
+            window.addEventListener('online', function() {
+                debugLog('🌐 네트워크 연결 복구됨');
+                updateConnectionStatus(true, '(네트워크 복구)');
+                loadData();
+            });
+
+            window.addEventListener('offline', function() {
+                debugLog('📡 네트워크 연결 끊어짐');
+                updateConnectionStatus(false, '(네트워크 오프라인)');
+            });
+        }
+
+        // 개발자를 위한 전역 함수들
+        window.dashboardAPI = {
+            testConnection,
+            loadData,
+            loadStats,
+            loadConversations,
+            debugLog,
+            clearDebugLog,
+            
+            // 데이터 접근
+            getAllConversations: () => allConversations,
+            getConnectionStatus: () => isOnline,
+            
+            // 유틸리티
+            exportData: () => {
+                const data = {
+                    timestamp: new Date().toISOString(),
+                    conversations: allConversations,
+                    stats: {
+                        total: document.getElementById('totalConversations').textContent,
+                        sessions: document.getElementById('uniqueSessions').textContent,
+                        avgTime: document.getElementById('avgResponseTime').textContent,
+                        model: document.getElementById('popularModel').textContent
+                    }
+                };
+                
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `rag_dashboard_export_${new Date().toISOString().split('T')[0]}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                debugLog('📥 데이터 내보내기 완료');
+            }
+        };
+
+        // 개발자 콘솔 메시지
+        console.log(`
+🤖 CHEESEADE RAG 대시보드 로드됨!
+
+사용 가능한 개발자 명령어:
+• window.dashboardAPI.testConnection() - 연결 테스트
+• window.dashboardAPI.loadData() - 데이터 새로고침  
+• window.dashboardAPI.exportData() - 데이터 내보내기
+• window.dashboardAPI.debugLog(message) - 디버그 로그 추가
+• window.dashboardAPI.getAllConversations() - 모든 대화 데이터 반환
+
+디버그 모드: 대시보드에서 '🔧 디버그' 버튼 클릭
+        `);
+    </script>
+</body>
+</html>
